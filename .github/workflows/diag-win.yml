@@ -1,0 +1,139 @@
+name: diag-win
+
+# TEMPORARY probe for issue #19 (Windows: no embedded player). Runs only by
+# hand, on the claude/ branch; never meant for testing/main. It answers, on a
+# real Windows runner: does the runner have vulkan-1.dll (which would explain
+# why the release self-check passed), does the shipped 1.2.11 mpv-2.dll load
+# there and against which loader, does a Khronos Vulkan-Loader built from
+# source satisfy mpv-2.dll's imports, and how long does that build take.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            cmake_arch: x64
+            zip: dopeIPTV-1.2.11-windows-x64.zip
+          - runner: windows-11-arm
+            arch: arm64
+            cmake_arch: ARM64
+            zip: dopeIPTV-1.2.11-windows-arm64.zip
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: System Vulkan runtime and display adapter
+        shell: pwsh
+        run: |
+          "== System32 vulkan*"
+          Get-ChildItem C:\Windows\System32\vulkan* -ErrorAction SilentlyContinue | Format-Table Name, Length, LastWriteTime -AutoSize
+          "== SysWOW64 vulkan*"
+          Get-ChildItem C:\Windows\SysWOW64\vulkan* -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
+          "== vulkan-1.dll version"
+          (Get-Item C:\Windows\System32\vulkan-1.dll -ErrorAction SilentlyContinue).VersionInfo | Format-List FileVersion, ProductVersion, CompanyName, FileDescription
+          "== ICDs"
+          Get-ItemProperty 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers' -ErrorAction SilentlyContinue | Format-List
+          "== display adapters"
+          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, DriverDate, AdapterCompatibility, VideoProcessor | Format-List
+          "== OS"
+          $os = Get-CimInstance Win32_OperatingSystem
+          "$($os.Caption) $($os.Version)"
+          "== tools"
+          cmake --version
+          7z | Select-Object -First 2
+      - name: Load the shipped 1.2.11 mpv-2.dll and see where vulkan-1.dll came from
+        shell: bash
+        run: |
+          curl -sSL --retry 3 -o dope.zip "https://github.com/slimture/dopeIPTV/releases/download/v1.2.11/${{ matrix.zip }}"
+          7z x -y dope.zip 'dopeiptv/_internal/mpv-2.dll' > /dev/null
+          ls -la dopeiptv/_internal/mpv-2.dll
+          python tools/win_dll_audit.py dopeiptv/_internal/mpv-2.dll || true
+          python - <<'EOF'
+          import ctypes, os
+          k = ctypes.windll.kernel32
+          def where(name):
+              h = k.GetModuleHandleW(name)
+              if not h:
+                  return None
+              buf = ctypes.create_unicode_buffer(2048)
+              k.GetModuleFileNameW(h, buf, 2048)
+              return buf.value
+          p = os.path.abspath('dopeiptv/_internal/mpv-2.dll')
+          try:
+              ctypes.CDLL(p, 0x1100)
+              print("mpv-2.dll: loaded OK")
+          except OSError as e:
+              print("mpv-2.dll: FAILED:", e)
+          print("vulkan-1.dll in process:", where("vulkan-1.dll"))
+          EOF
+      - name: Build Khronos Vulkan-Loader (pinned tag)
+        shell: bash
+        run: |
+          set -x
+          t0=$(date +%s)
+          git clone --quiet --depth 1 --branch v1.4.362 https://github.com/KhronosGroup/Vulkan-Loader vulkan-loader
+          cmake -S vulkan-loader -B vl-build -A ${{ matrix.cmake_arch }} \
+            -D UPDATE_DEPS=ON -D BUILD_TESTS=OFF -D BUILD_WERROR=OFF
+          cmake --build vl-build --config Release
+          echo "build took $(( $(date +%s) - t0 ))s"
+          find vl-build -iname 'vulkan-1.dll' -exec ls -la {} \;
+          dll=$(find vl-build -iname 'vulkan-1.dll' | head -1)
+          mkdir -p ours
+          cp "$dll" ours/vulkan-1.dll
+          cp vulkan-loader/LICENSE.txt ours/
+          python tools/win_dll_audit.py ours/vulkan-1.dll
+      - name: Does OUR loader satisfy mpv-2.dll's imports (ours loaded first)
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import ctypes, os
+          k = ctypes.windll.kernel32
+          def where(name):
+              h = k.GetModuleHandleW(name)
+              if not h:
+                  return None
+              buf = ctypes.create_unicode_buffer(2048)
+              k.GetModuleFileNameW(h, buf, 2048)
+              return buf.value
+          v = ctypes.CDLL(os.path.abspath('ours/vulkan-1.dll'))
+          print("our loader loaded from:", where("vulkan-1.dll"))
+          ver = ctypes.c_uint32(0)
+          v.vkEnumerateInstanceVersion(ctypes.byref(ver))
+          print("vkEnumerateInstanceVersion:", ver.value >> 22,
+                (ver.value >> 12) & 0x3ff, ver.value & 0xfff)
+          ctypes.CDLL(os.path.abspath('dopeiptv/_internal/mpv-2.dll'), 0x1100)
+          print("mpv-2.dll loaded OK against:", where("vulkan-1.dll"))
+          EOF
+      - name: Bundle position - a loader next to mpv-2.dll wins over System32
+        shell: bash
+        run: |
+          cp ours/vulkan-1.dll dopeiptv/_internal/vulkan-1.dll
+          python - <<'EOF'
+          import ctypes, os
+          k = ctypes.windll.kernel32
+          def where(name):
+              h = k.GetModuleHandleW(name)
+              if not h:
+                  return None
+              buf = ctypes.create_unicode_buffer(2048)
+              k.GetModuleFileNameW(h, buf, 2048)
+              return buf.value
+          ctypes.CDLL(os.path.abspath('dopeiptv/_internal/mpv-2.dll'), 0x1100)
+          print("mpv-2.dll loaded; vulkan-1.dll resolved from:", where("vulkan-1.dll"))
+          EOF
+          python tools/win_dll_audit.py dopeiptv/_internal/mpv-2.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vulkan-loader-${{ matrix.arch }}
+          path: ours/
