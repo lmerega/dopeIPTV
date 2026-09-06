@@ -37,6 +37,22 @@ IF DEFENDER CALLS IT A TROJAN AND DELETES IT
   The permanent fix is an authenticode signature on the exe, which needs a
   paid certificate. It is on the list.
 
+NO VIDEO INSIDE THE APP - channels open in a separate mpv window, or
+"mpv was not found" appears
+  The built-in player is libmpv (mpv-2.dll in the _internal folder). When
+  Windows cannot load it, the app falls back to an external mpv and says
+  why under Settings -> Playback ("Embedded playback unavailable: ...").
+  Two known causes:
+    - An antivirus quarantined mpv-2.dll. Allow it (see above), then unzip
+      the download again.
+    - Earlier releases needed the Vulkan runtime (vulkan-1.dll), which
+      graphics drivers install and which old drivers, virtual machines and
+      the basic display adapter do not have. This release ships its own
+      copy; on an older release, updating the graphics driver also fixes it.
+  For a bug report, capture a log: open PowerShell in this folder and run
+     $env:DOPEIPTV_LOG="debug"; $env:DOPEIPTV_LOG_FILE="$env:TEMP\dopeiptv.log"; .\dopeiptv.exe
+  then attach %TEMP%\dopeiptv.log (passwords are masked automatically).
+
 OPTIONAL - Start-menu / desktop shortcut
   In the app: Settings -> Interface -> Maintenance -> Create shortcut.
   (Each shortcut is a single .lnk file you can delete anytime.)

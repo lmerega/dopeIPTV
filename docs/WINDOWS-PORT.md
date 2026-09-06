@@ -11,6 +11,7 @@
 - Wired into `app.py` (OpenGL on win32), `media/players.py` (libmpv soname + discovery), `core/wakelock.py` (native lock).
 - `dopeiptv-win.spec` (PyInstaller onedir, bundles `mpv-2.dll`, `.ico`).
 - CI: a `windows-zip` job in `release.yml` (fetches libmpv, builds a portable zip, attaches it to the release). `continue-on-error` while it settles.
+- The zhongfly libmpv hard-links `vulkan-1.dll` (the Vulkan loader), which Windows does not ship - graphics drivers do. CI builds the Khronos loader at a pinned tag and ships it beside `mpv-2.dll`; `tools/win_dll_audit.py` fails the build on any other import Windows lacks (issue #19).
 - Website recognises the Windows `.zip` (sync `USER_EXTS` + `classify`), hero OS-detect updated.
 
 **Remaining before it's usable:**

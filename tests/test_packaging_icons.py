@@ -112,7 +112,7 @@ def test_every_repo_file_a_workflow_names_actually_exists():
     # committed assets. Deliberately narrow: this is about FILES IN THE
     # TREE, not about ${{ }} expressions.
     pattern = re.compile(
-        r"(?<![\w/.-])((?:packaging|docs|dopeiptv)/[\w./-]+\.[a-z0-9]{2,5})")
+        r"(?<![\w/.-])((?:packaging|docs|dopeiptv|tools)/[\w./-]+\.[a-z0-9]{2,5})")
 
     # Paths the workflow WRITES rather than reads. Listed one by one on
     # purpose: a new entry here should be a deliberate decision, not a

@@ -289,6 +289,34 @@ def main() -> int:
             log.error("self-check: embedded playback DISABLED: %s", reason)
             return 1
         log.info("self-check: embedded playback OK (bundled libmpv loaded)")
+        if sys.platform == "win32" and getattr(sys, "frozen", False):
+            # libmpv hard-links vulkan-1.dll, which Windows does not ship:
+            # graphics drivers do. The build machine has one, so the load
+            # above succeeds there whether or not the bundle carries its own
+            # copy - which is how 1.2.11 shipped without one and had no
+            # in-app video on any PC whose driver predates Vulkan (#19).
+            # The bundle dir is first in the DLL search order, so if the
+            # loaded copy is not the bundled one, the bundle has none.
+            from .core.platform_windows import loaded_module_path
+            bundle = getattr(sys, "_MEIPASS", "") or ""
+            loaded = loaded_module_path("vulkan-1.dll")
+
+            def _same(a: str, b: str) -> bool:
+                return (os.path.normcase(os.path.realpath(a))
+                        == os.path.normcase(os.path.realpath(b)))
+            if loaded is None:
+                # A static import is loaded with the DLL, so not loaded
+                # means this libmpv build does not link it at all.
+                log.info("self-check: libmpv does not link vulkan-1.dll")
+            elif not _same(os.path.dirname(loaded), bundle):
+                log.error("self-check: vulkan-1.dll must come from the "
+                          "bundle (%s) but was loaded from %s - libmpv "
+                          "will not load on a PC without a Vulkan driver",
+                          bundle, loaded)
+                return 1
+            else:
+                log.info("self-check: vulkan-1.dll loaded from the bundle "
+                         "(%s)", loaded)
         # Every shipped language must actually load from THIS bundle. The
         # locale JSONs live outside the code archive in frozen builds, so a
         # packaging slip silently collapses the picker to English-only (the

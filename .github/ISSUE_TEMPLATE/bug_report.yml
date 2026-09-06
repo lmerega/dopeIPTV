@@ -66,9 +66,12 @@ body:
     attributes:
       label: Logs (optional but golden)
       description: |
-        Run the app as `DOPEIPTV_LOG=debug DOPEIPTV_LOG_FILE=/tmp/dope.log dopeiptv`,
-        reproduce the bug, then paste the relevant part. Credentials are redacted
-        automatically, but skim before posting.
+        Start the app with logging on, reproduce the bug, then paste the relevant part (the whole file is fine).
+        **Linux:** `DOPEIPTV_LOG=debug DOPEIPTV_LOG_FILE=/tmp/dope.log dopeiptv` (or the path to the AppImage).
+        **macOS:** `DOPEIPTV_LOG=debug DOPEIPTV_LOG_FILE=/tmp/dope.log /Applications/dopeIPTV.app/Contents/MacOS/dopeiptv`
+        **Windows:** in PowerShell, inside the unzipped folder:
+        `$env:DOPEIPTV_LOG="debug"; $env:DOPEIPTV_LOG_FILE="$env:TEMP\dopeiptv.log"; .\dopeiptv.exe` — the log is then at `%TEMP%\dopeiptv.log`.
+        Credentials are redacted automatically, but skim before posting.
       render: text
   - type: checkboxes
     id: checks

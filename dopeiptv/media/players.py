@@ -81,6 +81,9 @@ def embedded_playback_reason() -> str | None:
         if sys.platform == "darwin":
             from ..core.platform_macos import libmpv_install_hint
             hint = libmpv_install_hint()
+        elif sys.platform == "win32":
+            from ..core.platform_windows import libmpv_load_hint
+            hint = libmpv_load_hint()
         return (f"python-mpv/libmpv failed to load ({_libmpv_error})"
                 + hint)
     if not hasattr(_libmpv, "MpvRenderContext"):
