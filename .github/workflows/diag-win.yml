@@ -8,6 +8,8 @@ name: diag-win
 # source satisfy mpv-2.dll's imports, and how long does that build take.
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/dopeiptv-segfault-mlueqe]
 
 permissions:
   contents: read
