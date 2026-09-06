@@ -12,6 +12,32 @@ import os
 import sys
 
 
+def _libmpv_candidate_dirs() -> list[str]:
+    """Where a bundled ``mpv-2.dll`` may sit: the frozen bundle, the exe's
+    dir, the repo's ``libmpv\\`` (source runs), a ``libmpv\\`` subdir."""
+    frozen = getattr(sys, "frozen", False)
+    meipass = getattr(sys, "_MEIPASS", None)
+    exe_dir = os.path.dirname(sys.executable) if frozen else ""
+    repo_libmpv = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "libmpv")
+    candidates = [meipass, exe_dir, repo_libmpv,
+                  os.path.join(meipass or "", "libmpv") if meipass else ""]
+    return list(dict.fromkeys(c for c in candidates if c))
+
+
+def _holds_libmpv(d: str) -> bool:
+    return os.path.isdir(d) and bool(
+        glob.glob(os.path.join(d, "mpv-*.dll"))
+        or glob.glob(os.path.join(d, "libmpv-*.dll")))
+
+
+def bundled_libmpv_dir() -> str | None:
+    """The first candidate directory that actually holds a libmpv DLL."""
+    return next((d for d in _libmpv_candidate_dirs() if _holds_libmpv(d)),
+                None)
+
+
 def find_libmpv() -> None:
     """Make a bundled ``mpv-2.dll`` loadable by python-mpv.
 
@@ -21,25 +47,38 @@ def find_libmpv() -> None:
     search path. No-op if no bundled DLL is found - a system-wide mpv on PATH
     still works then.
     """
-    frozen = getattr(sys, "frozen", False)
-    meipass = getattr(sys, "_MEIPASS", None)
-    exe_dir = os.path.dirname(sys.executable) if frozen else ""
-    repo_libmpv = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "libmpv")
-    candidates = [meipass, exe_dir, repo_libmpv,
-                  os.path.join(meipass or "", "libmpv") if meipass else ""]
-    for d in dict.fromkeys(c for c in candidates if c):
-        if not os.path.isdir(d):
-            continue
-        if glob.glob(os.path.join(d, "mpv-*.dll")) or glob.glob(
-                os.path.join(d, "libmpv-*.dll")):
-            try:
-                os.add_dll_directory(d)          # Python 3.8+
-            except (OSError, AttributeError):
-                pass
-            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
-            return
+    d = bundled_libmpv_dir()
+    if d is None:
+        return
+    try:
+        os.add_dll_directory(d)          # Python 3.8+
+    except (OSError, AttributeError):
+        pass
+    os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+
+
+def loaded_module_path(name: str) -> str | None:
+    """Full path of the DLL *name* as loaded in THIS process, or None if it
+    is not loaded (or this is not Windows). Lets the self-check prove that
+    a dependency came from the bundle rather than from the build machine."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    try:
+        k32 = ctypes.windll.kernel32
+        k32.GetModuleHandleW.restype = ctypes.c_void_p
+        k32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+        k32.GetModuleFileNameW.argtypes = [
+            ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_uint]
+        handle = k32.GetModuleHandleW(name)
+        if not handle:
+            return None
+        buf = ctypes.create_unicode_buffer(32768)
+        if not k32.GetModuleFileNameW(handle, buf, len(buf)):
+            return None
+        return buf.value
+    except Exception:
+        return None
 
 
 def setup_opengl() -> None:
@@ -141,8 +180,44 @@ def create_shortcut(desktop: bool = True, start_menu: bool = True,
     return made
 
 
-def libmpv_install_hint() -> str:
-    """User-facing hint when libmpv can't be loaded (dev runs without the DLL)."""
-    return ("mpv-2.dll was not found. The installer bundles it; for a source "
-            "run, put mpv-2.dll next to the app or on your PATH "
-            "(https://mpv.io/installation/).")
+def libmpv_load_hint() -> str:
+    """What to tell the user when python-mpv could not load libmpv.
+
+    Shown after the raw error in Settings > Playback and in the log, so it
+    has to say something a user can act on. Two failures look identical from
+    python-mpv's side ("could not load it"):
+
+    - the DLL is gone - an antivirus quarantined it (Defender flags
+      PyInstaller apps, see WINDOWS-README.txt), or the exe was moved out
+      of its folder;
+    - the DLL is there but Windows refused it because a DLL *it* needs is
+      missing. libmpv hard-links ``vulkan-1.dll``, the Vulkan loader, which
+      Windows itself does not ship - graphics drivers install it, so a
+      driver older than Vulkan, a VM or the basic display adapter has none.
+      Releases now bundle the loader beside mpv-2.dll (issue #19); the
+      check stays for older builds and for a bundle that lost the file.
+    """
+    d = bundled_libmpv_dir()
+    if d is None:
+        if getattr(sys, "frozen", False):
+            return (" mpv-2.dll is missing from the app's _internal folder: "
+                    "an antivirus may have quarantined it (see README.txt), "
+                    "or the exe was moved away from its folder. Unzip the "
+                    "download again.")
+        return (" mpv-2.dll was not found. For a source run, put mpv-2.dll "
+                "next to the app or on your PATH "
+                "(https://mpv.io/installation/).")
+    system32 = os.path.join(
+        os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+    vulkan = next((os.path.join(p, "vulkan-1.dll") for p in (d, system32)
+                   if os.path.isfile(os.path.join(p, "vulkan-1.dll"))), None)
+    if vulkan is None:
+        return (f" mpv-2.dll is present ({d}) but Windows could not load "
+                "it: it needs vulkan-1.dll (the Vulkan runtime that "
+                "graphics drivers install), and this PC has none. Update "
+                "to a dopeIPTV release that bundles it, or update the "
+                "graphics driver.")
+    return (f" mpv-2.dll is present ({d}) and vulkan-1.dll was found "
+            f"({vulkan}), so a different dependency is missing or the file "
+            "is damaged. Please attach a log to a bug report (see "
+            "README.txt).")

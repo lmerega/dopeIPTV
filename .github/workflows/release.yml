@@ -664,14 +664,16 @@ jobs:
         include:
           - runner: windows-latest
             arch: x64
-            mpv_asset: mpv-dev-x86_64
+            mpv_arch: x86_64
+            cmake_arch: x64
           # Native Windows-on-ARM (Snapdragon laptops). The x64 zip runs there
           # under Prism emulation, but native means real battery life - and the
           # whole supply chain exists now: PyQt6 ships win_arm64 wheels since
           # 6.9.1 and zhongfly/mpv-winbuild publishes mpv-dev-aarch64.
           - runner: windows-11-arm
             arch: arm64
-            mpv_asset: mpv-dev-aarch64
+            mpv_arch: aarch64
+            cmake_arch: ARM64
     steps:
       - uses: actions/checkout@v5
       - name: Guard - release notes must match this version
@@ -736,24 +738,60 @@ jobs:
           # with no "assets" key. That raised KeyError, and under this job's
           # continue-on-error it silently shipped a release with NO Windows zip
           # (v1.2.0). Auth lifts the limit to 1000/hr; empty URL now fails loud.
+          #
+          # The release lists several archives per architecture - a baseline
+          # build, an x86-64-v3 (AVX2-only) build, LGPL variants - and a
+          # substring test matched more than one, with the API's listing order
+          # deciding which one shipped. The picker matches the whole name and
+          # insists on exactly one hit (tools/pick_mpv_asset.py); it exits
+          # non-zero with the response's head when there is none.
           api() {
             curl -sSL --retry 3 --retry-delay 5 \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest
           }
-          url=$(api | MPV_ASSET='${{ matrix.mpv_asset }}' python -c "import sys,os,json;d=json.load(sys.stdin);a=d.get('assets') or [];print(next((x['browser_download_url'] for x in a if os.environ['MPV_ASSET'] in x['name'] and x['name'].endswith('.7z')), ''))")
-          if [ -z "$url" ]; then
-            echo "::error::libmpv download URL not found (rate-limited, or the asset was renamed). API response:"
-            api | head -c 500; echo
-            exit 1
-          fi
+          url=$(api | python tools/pick_mpv_asset.py ${{ matrix.mpv_arch }})
           echo "mpv-dev: $url"
           curl -sSL --retry 3 --retry-delay 5 -o mpv-dev.7z "$url"
           7z x mpv-dev.7z -ompv-dev
           dll=$(find mpv-dev -iname 'libmpv-2.dll' -o -iname 'mpv-2.dll' | head -1)
           echo "libmpv dll: $dll"
           cp "$dll" libmpv/mpv-2.dll
+          ls -la libmpv
+      - name: Vulkan loader (vulkan-1.dll)
+        shell: bash
+        env:
+          # Bump deliberately: the pinned tag is what makes this reproducible.
+          VULKAN_LOADER_TAG: v1.4.362
+        run: |
+          # libmpv hard-links vulkan-1.dll - the Khronos Vulkan loader - and
+          # Windows does not ship it; graphics drivers install it. On a PC
+          # whose driver predates Vulkan, in a VM, or on the basic display
+          # adapter there is none, LoadLibrary(mpv-2.dll) fails outright, and
+          # the app silently fell back to an external mpv (issue #19). The
+          # self-check never saw it: this runner has a loader of its own.
+          #
+          # Build the loader from source at a pinned tag and drop it beside
+          # mpv-2.dll. The spec ships every DLL in libmpv/, and a DLL's own
+          # directory comes first in the search order Windows uses for its
+          # dependencies, so the bundled copy is the one that loads on every
+          # PC and the driver no longer matters. It is only a loader: with no
+          # Vulkan driver it reports no devices, and the app renders through
+          # OpenGL anyway. Apache-2.0; its notice ships beside it.
+          git clone --quiet --depth 1 --branch "${VULKAN_LOADER_TAG}" \
+            https://github.com/KhronosGroup/Vulkan-Loader vulkan-loader
+          cmake -S vulkan-loader -B vulkan-loader/build -A ${{ matrix.cmake_arch }} \
+            -D CMAKE_BUILD_TYPE=Release -D UPDATE_DEPS=ON -D BUILD_TESTS=OFF \
+            -D BUILD_WERROR=OFF
+          cmake --build vulkan-loader/build --config Release
+          dll=$(find vulkan-loader/build -iname 'vulkan-1.dll' | head -1)
+          if [ -z "$dll" ]; then
+            echo "::error::Vulkan-Loader ${VULKAN_LOADER_TAG} built no vulkan-1.dll"
+            exit 1
+          fi
+          cp "$dll" libmpv/vulkan-1.dll
+          cp vulkan-loader/LICENSE.txt libmpv/LICENSE-Vulkan-Loader.txt
           ls -la libmpv
       - name: Build .ico from the app PNG
         shell: bash
@@ -772,12 +810,22 @@ jobs:
         env:
           LIBMPV_DIR: ${{ github.workspace }}/libmpv
         run: pyinstaller --noconfirm dopeiptv-win.spec   # -> dist/dopeiptv/
+      - name: Audit - what the shipped DLLs import
+        shell: bash
+        run: |
+          # Every DLL that mpv-2.dll (and the loader) imports must be either
+          # Windows' own or in the bundle beside it. The self-check below
+          # cannot tell: mpv-2.dll loads on this runner whatever the image
+          # happens to have installed. Reading the import tables can.
+          python tools/win_dll_audit.py \
+            dist/dopeiptv/_internal/mpv-2.dll dist/dopeiptv/_internal/vulkan-1.dll
       - name: Smoke test - self-check the frozen exe (libmpv + languages)
         shell: pwsh
         run: |
           # The exe is a windowed app, so PowerShell won't wait on its own -
-          # Start-Process -Wait does. Exit code 0 = bundled libmpv loads AND
-          # every shipped language registers from the bundle.
+          # Start-Process -Wait does. Exit code 0 = bundled libmpv loads, the
+          # vulkan-1.dll it pulls in is the bundled copy (not the runner's),
+          # AND every shipped language registers from the bundle.
           $p = Start-Process -FilePath "dist\dopeiptv\dopeiptv.exe" `
                  -ArgumentList "--self-check" -Wait -PassThru
           if ($p.ExitCode -ne 0) {

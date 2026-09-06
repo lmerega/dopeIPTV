@@ -6,6 +6,12 @@ PyInstaller's import analysis never sees it - we locate the DLL ourselves and
 put it next to the exe so ``CDLL("mpv-2.dll")`` (and ``platform_windows.
 find_libmpv``) resolve it. The Windows libmpv build (e.g. shinchiro's
 ``mpv-dev``) statically bundles ffmpeg, so no separate av* libraries are needed.
+
+One thing it does NOT bundle: ``vulkan-1.dll``, the Vulkan loader, which it
+hard-links and which Windows itself does not ship (graphics drivers install
+it). CI builds the loader and drops it in ``libmpv/`` beside ``mpv-2.dll``;
+every DLL in that directory is shipped, so it lands in ``_internal`` where
+the DLL search order finds it first, on every PC (issue #19).
 """
 
 import glob
@@ -36,16 +42,27 @@ def _find_libmpv_win():
                 shutil.copy2(p, staged)
                 print(f"Bundling libmpv: {p} -> mpv-2.dll")
                 extra = [(staged, ".")]
-                # Ship any sibling DLLs the build split out (rare; mpv-dev is
-                # usually self-contained).
+                # Ship every sibling DLL: the Vulkan loader CI builds
+                # (vulkan-1.dll), plus anything a libmpv build splits out.
                 skip = {n.lower() for n in names}
                 for dep in glob.glob(os.path.join(d, "*.dll")):
                     if os.path.basename(dep).lower() not in skip:
+                        print(f"Bundling {os.path.basename(dep)} beside it")
                         extra.append((dep, "."))
                 return extra
     print("WARNING: mpv-2.dll not found; the embedded player will not work in "
           "this build. Put mpv-2.dll in ./libmpv or set LIBMPV_DIR.")
     return []
+
+
+def _libmpv_licenses():
+    """Licence texts CI drops beside the DLLs (the Vulkan loader is
+    Apache-2.0, which asks that its notice travel with the binary)."""
+    out = []
+    for d in (os.environ.get("LIBMPV_DIR", ""), os.path.join(os.getcwd(), "libmpv")):
+        if d and os.path.isdir(d):
+            out += [(p, ".") for p in glob.glob(os.path.join(d, "LICENSE*"))]
+    return out
 
 
 def _find_ffmpeg_win():
@@ -57,7 +74,7 @@ def _find_ffmpeg_win():
 
 
 binaries = _find_libmpv_win() + _find_ffmpeg_win()
-datas = []
+datas = _libmpv_licenses()
 # Our own package data: the add-on locale JSONs (i18n loads them at import).
 datas += collect_data_files('dopeiptv')
 # Belt-and-suspenders: add the locale JSONs explicitly too, so the languages
