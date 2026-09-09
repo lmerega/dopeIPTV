@@ -121,6 +121,13 @@ QT_QPA_PLATFORM=offscreen pytest -q
   `tests/test_packaging_icons.py` now fails on any repo path a workflow
   names that does not exist, so this cannot reach CI again - but the habit
   is cheaper than the test.
+- **Branches: app work goes on `testing`, releases go `testing` → `main`,
+  the website lives on `website`. No other branches, not even for a CI
+  experiment.** A scratch branch pushed to GitHub runs workflows, leaves
+  commits and artifacts behind, and confuses the history - and it happened,
+  while probing a Windows runner for issue #19. To exercise the Windows
+  release job without tagging, run `release.yml` by hand (`workflow_dispatch`)
+  on `testing`; the "Attach to release" steps only fire on a tag.
 - **A test may only import what CI installs**, which is `requirements.txt`
   plus ruff, mypy and pytest - see `.github/workflows/ci.yml`. A green run
   locally proves nothing about a module that happens to be on this machine
