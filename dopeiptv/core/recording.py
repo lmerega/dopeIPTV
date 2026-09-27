@@ -16,6 +16,9 @@ from PyQt6.QtCore import QObject, QSettings, QTimer, pyqtSignal
 
 from .player_exec import find_player_executable
 
+#: What the player sends, so a panel that plays a channel also records it.
+RECORD_UA = "dopeIPTV/1.0"
+
 
 def _bundled_ffmpeg() -> str | None:
     """Path to an ffmpeg shipped inside a frozen (PyInstaller/AppImage) build.
@@ -352,14 +355,15 @@ class RecordingManager(QObject):
         secs = (max(1, int(j["stop"] - time.time()))
                 if j.get("stop") else None)
         if kind == "ffmpeg":
-            cmd = [exe, "-y", "-loglevel", "error", "-i", j["url"],
+            cmd = [exe, "-y", "-loglevel", "error",
+                   *self._input_options(j["url"]), "-i", j["url"],
                    "-c", "copy"]
             if secs:
                 cmd += ["-t", str(secs)]
             cmd.append(path)
         else:
             cmd = [exe, j["url"], f"--stream-record={path}", "--vo=null",
-                   "--ao=null", "--no-terminal"]
+                   "--ao=null", "--no-terminal", f"--user-agent={RECORD_UA}"]
             if secs:
                 cmd.append(f"--length={secs}")
         try:
@@ -373,6 +377,27 @@ class RecordingManager(QObject):
         except Exception as e:
             j["status"] = "failed"
             j["error"] = str(e)
+
+    @staticmethod
+    def _input_options(url: str) -> list[str]:
+        """ffmpeg's HTTP input options for *url*.
+
+        The same User-Agent the player sends: panels that accept the player
+        refuse ffmpeg's own "Lavf", and a recording that started fine failed
+        at once. Reconnects keep a live recording going over the dropped
+        connections these panels hand out; not for an archive window, where
+        a reconnect restarts the stretch from its beginning. Only options
+        every ffmpeg in use knows - an unknown one fails the whole command.
+        A local file takes none of them."""
+        if "://" not in url:
+            return []
+        opts = ["-user_agent", RECORD_UA]
+        path = url.split("?", 1)[0].lower()
+        if url.lower().startswith("http") and not (
+                "/timeshift/" in path or "timeshift.php" in path):
+            opts += ["-reconnect", "1", "-reconnect_streamed", "1",
+                     "-reconnect_delay_max", "5"]
+        return opts
 
     @staticmethod
     def _stop_proc(j: dict) -> None:

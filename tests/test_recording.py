@@ -101,3 +101,50 @@ def test_total_recordings_cap(tmp_path):
     s.setValue("rec_total_value", "1")
     s.setValue("rec_total_unit", "TB")
     assert rm.total_cap_bytes() == 10**12 and not rm.total_cap_exceeded()
+
+
+def test_ffmpeg_records_with_the_players_user_agent(tmp_path, monkeypatch):
+    """ffmpeg sent its own "Lavf" User-Agent, which panels that accept the
+    player refuse, so a recording failed at once; and one dropped connection
+    ended it. A live URL gets the player's UA and reconnects, an archive
+    window only the UA (a reconnect there restarts it), a local file none."""
+    from PyQt6.QtCore import QSettings
+    from dopeiptv.core import recording
+    from dopeiptv.core.recording import RECORD_UA, RecordingManager
+
+    s = QSettings("dopeIPTV-test", "recua")
+    s.clear()
+    s.setValue("recordings_dir", str(tmp_path))
+    rm = RecordingManager(s)
+    seen = []
+
+    class FakeProc:
+        def __init__(self, cmd, **_kw):
+            seen.append(cmd)
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(recording.subprocess, "Popen", FakeProc)
+    monkeypatch.setattr(RecordingManager, "recorder",
+                        staticmethod(lambda: ("ffmpeg", "/usr/bin/ffmpeg")))
+    live = "http://h.tv:8080/live/u/p/1.ts"
+    arch = "http://h.tv:8080/timeshift/u/p/60/2026-09-27:20-00/1.ts"
+    for url in (live, arch):
+        rm._spawn({"url": url, "title": "T", "stop": None})
+    cmd_live, cmd_arch = seen
+    i = cmd_live.index("-i")
+    assert cmd_live[i + 1] == live
+    before = cmd_live[:i]
+    assert before[before.index("-user_agent") + 1] == RECORD_UA
+    assert "-reconnect_streamed" in before
+    j = cmd_arch.index("-i")
+    assert "-user_agent" in cmd_arch[:j]
+    assert "-reconnect" not in cmd_arch
+    assert RecordingManager._input_options("/tmp/x.ts") == []
+
+    seen.clear()
+    monkeypatch.setattr(RecordingManager, "recorder",
+                        staticmethod(lambda: ("mpv", "/usr/bin/mpv")))
+    rm._spawn({"url": live, "title": "T", "stop": None})
+    assert f"--user-agent={RECORD_UA}" in seen[0]
