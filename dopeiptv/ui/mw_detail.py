@@ -498,7 +498,8 @@ class _DetailMixin:
                     continue
                 if self._title_matches(cnorm, norm_titles, long_titles):
                     matches.append((it, kind))
-            callback(matches)
+            callback([(it, kind) for it, kind in matches
+                      if self._visible_catalog([it], kind)])
 
         self._ensure_full_catalog(with_catalog)
 

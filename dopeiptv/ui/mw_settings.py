@@ -284,7 +284,7 @@ class _SettingsMixin:
 
         def done(channels):
             dlg.close()
-            EpgGridDialog(self, channels or []).exec()
+            EpgGridDialog(self, self._visible_catalog(channels, "live")).exec()
 
         run_async(self.pool, lambda: self.client.live_streams(None),
                   done, lambda _: dlg.close())

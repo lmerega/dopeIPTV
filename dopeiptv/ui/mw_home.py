@@ -594,8 +594,13 @@ class HomePage(QWidget):
     # -- data ------------------------------------------------------------------
 
     def _favorite_channels(self) -> list[dict]:
+        w = self.window
+        locked = (set() if w.parental.session_unlocked
+                  else set(w.favs.locked_groups()))
         seen, out = set(), []
-        for items in getattr(self.window.favs, "groups", {}).values():
+        for group, items in getattr(w.favs, "groups", {}).items():
+            if group in locked:
+                continue
             for it in items:
                 sid = it.get("stream_id")
                 if sid is not None and sid not in seen:
@@ -682,8 +687,10 @@ class HomePage(QWidget):
             # Keep each shelf to its own content type. Some providers dump live
             # channels into the VOD "all" list, so the Movies shelf takes only
             # real movie rows and the Series shelf only rows with a series_id.
-            vod = [i for i in vod if self._is_movie(i)]
-            ser = [i for i in ser if i.get("series_id") is not None]
+            vod = [i for i in w._visible_catalog(vod, "vod")
+                   if self._is_movie(i)]
+            ser = [i for i in w._visible_catalog(ser, "series")
+                   if i.get("series_id") is not None]
             vod.sort(key=lambda i: self._num(i.get("added")), reverse=True)
             ser.sort(key=lambda i: self._num(i.get("last_modified")),
                      reverse=True)
@@ -754,7 +761,8 @@ class HomePage(QWidget):
             return list(client.live_streams(None) or [])
 
         def done(chan):
-            chan = [i for i in chan if i.get("stream_id") is not None]
+            chan = [i for i in w._visible_catalog(chan, "live")
+                    if i.get("stream_id") is not None]
             chan.sort(key=lambda i: self._num(i.get("added")), reverse=True)
             chan = chan[:18]
             w._home_chan_cache = (time.time(), chan)
@@ -769,6 +777,9 @@ class HomePage(QWidget):
     def _fill_posters(self, vod: list, ser: list) -> None:
         w = self.window
         s = w.settings
+        # Again here: the memory and disk copies may predate a lock or a hide.
+        vod = w._visible_catalog(vod, "vod")
+        ser = w._visible_catalog(ser, "series")
 
         if s.value("home_sh_movies", "true") == "true" and vod:
             shelf = _Shelf(tr("home_new_movies"))
@@ -824,6 +835,7 @@ class HomePage(QWidget):
 
     def _fill_channels(self, chan: list) -> None:
         w = self.window
+        chan = w._visible_catalog(chan, "live")
         if w.settings.value("home_sh_channels", "true") != "true" or not chan:
             return
         shelf = _Shelf(tr("home_new_channels"))

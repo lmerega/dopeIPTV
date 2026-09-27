@@ -1973,6 +1973,9 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
             clear = getattr(self.client, "clear_list_cache", None)
             if clear is not None:
                 clear()
+        # Whole-catalogue copies built from the previous fetch (or provider).
+        self._full_catalog = None
+        self._search_index_cache = {}
         self._clear_ts_broken()   # re-trust the provider's tv_archive flags
         pl = self.playlist_store.active() if self.playlist_store else None
         pid = (pl or {}).get("id")
@@ -2055,6 +2058,12 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
             self.history = HistoryStore(self.settings, f"history_{pid}")
             self.resume = ResumeStore(self._resume_settings, pid)
             self.reminders = ReminderStore(self.settings, pid)
+            # Hide/rename/lock rules are per playlist too: kept, the old
+            # provider's locks applied here and edits saved under its key.
+            self.overrides = CategoryOverrides(
+                self.settings, f"category_overrides_{pid}")
+            self.channel_ov = ChannelOverrides(
+                self.settings, f"channel_overrides_{pid}")
             self._base_title = pl["name"]
             self.setWindowTitle(self._base_title)
             self._update_playlist_btn()
@@ -3080,6 +3089,17 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
             self.switch_mode("live")
         else:
             self._load_categories()
+
+    def _visible_catalog(self, items, mode: str) -> list:
+        """*items* from a provider-wide list (category None) with what the
+        user hid or locked taken out, exactly as the category views do. Home,
+        the guide and the searches read the whole catalogue directly, and
+        showed a locked category's films to anyone who opened them there."""
+        excluded = self.overrides.excluded_ids(
+            mode, include_locked=not self.parental.session_unlocked)
+        return [it for it in (items or [])
+                if str(it.get("category_id")) not in excluded
+                and not self._channel_hidden(it, mode)]
 
     def _channel_hidden(self, it, kind: str) -> bool:
         # A row carrying its own kind is judged by THAT, not by the view's.

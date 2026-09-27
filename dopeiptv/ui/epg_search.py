@@ -80,7 +80,7 @@ class EpgSearchDialog(QDialog):
         self.info.setText(tr("status_loading_channels"))
 
         def done(chans) -> None:
-            self._channels = chans or []
+            self._channels = self.window._visible_catalog(chans, "live")
             self.info.setText(tr("epg_search_hint"))
             self.box.setFocus()
             if self.box.text().strip():

@@ -530,8 +530,7 @@ class _ContextMenuMixin:
                     lambda: self._rename_fav_folder(store, group))
                 m.addAction(
                     tr("ctx_remove_folder", group=group),
-                    lambda: (store.remove_group(group),
-                             self._load_categories()))
+                    lambda: self._remove_fav_folder(store, group))
                 if section == "chan":
                     if store.is_locked(group):
                         m.addAction(tr("ctx_unlock_group"),
@@ -603,7 +602,7 @@ class _ContextMenuMixin:
             if self.overrides.is_locked(self.mode, cid):
                 m.addAction(
                     tr("ctx_unlock_category"),
-                    lambda: self._set_category_flag(cid, locked=False))
+                    lambda: self._unlock_category(cid))
             else:
                 m.addAction(tr("ctx_lock_category"),
                             lambda: self._lock_category(cid))
@@ -641,8 +640,18 @@ class _ContextMenuMixin:
             store.rename_group(group, name)
             self._load_categories()
 
+    def _remove_fav_folder(self, store, group: str) -> None:
+        # Removing a locked folder takes its lock with it - the PIN guards that
+        # just as it guards unlocking.
+        if store.is_locked(group) and not self._request_unlock():
+            return
+        store.remove_group(group)
+        self._load_categories()
+
     def _set_fav_lock(self, group: str, locked: bool) -> None:
         if locked and not self._ensure_pin_configured():
+            return
+        if not locked and not self._request_unlock():
             return
         self.favs.set_group_locked(group, locked)
         if locked:
@@ -695,6 +704,11 @@ class _ContextMenuMixin:
             return
         self.parental.lock_session()
         self._set_category_flag(cid, locked=True)
+
+    def _unlock_category(self, cid) -> None:
+        if not self._request_unlock():
+            return
+        self._set_category_flag(cid, locked=False)
 
     def _open_content_manager(self) -> None:
         if self.mode not in ("live", "vod", "series"):

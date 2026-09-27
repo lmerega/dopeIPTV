@@ -254,6 +254,8 @@ class ContentManagerDialog(QDialog):
         locked = not self.overrides.is_locked(self.mode, cid)
         if locked and not self.window._ensure_pin_configured():
             return
+        if not locked and not self.window._request_unlock():
+            return
         if locked:
             self.window.parental.lock_session()
         self.overrides.update(self.mode, cid, locked=locked)
