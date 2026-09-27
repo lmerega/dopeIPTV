@@ -1281,3 +1281,35 @@ def test_the_detail_panel_has_only_one_vertical_scroll_region():
 
     # The cast strip scrolls HORIZONTALLY - a different axis, no conflict.
     assert "self.cast_scroll = QScrollArea" in src
+
+
+def test_leaving_mid_scan_lets_the_next_visit_scan_again(tmp_path,
+                                                        monkeypatch):
+    """Leaving the section mid-walk stopped the walk but left it marked
+    active; the next visit took it for a walk still running and never
+    started one, so the library stayed half-scanned all session."""
+    import dopeiptv.ui.mw_local as ml
+    calls = []
+    monkeypatch.setattr(ml, "run_async",
+                        lambda pool, fn, done, err=None: calls.append(
+                            (fn, done)))
+    root = tmp_path / "M"
+    root.mkdir()
+    (root / "Show.S01E01.mkv").write_bytes(b"x")
+    w = _Stub()
+    w.settings.setValue("local_view", "series")
+    w._current_cat = str(root)
+
+    w._load_local_items(str(root))
+    fn, done = calls[-1]
+    w.mode = "live"                     # the user went to TV meanwhile
+    done(fn())
+    assert not w._local_scan_active
+
+    w.mode = "local"
+    before = len(calls)
+    w._load_local_items(str(root))
+    assert len(calls) > before          # a fresh walk was started
+    fn, done = calls[-1]
+    done(fn())
+    assert any(r.get("_kind") == "localseries" for r in w.rendered)

@@ -624,9 +624,18 @@ class _LocalFilesMixin:
             return False, False                # slice over, more to walk
 
         def done(result):
-            if token != getattr(self, "_local_scan_token", 0) \
-                    or self.mode != "local":
+            if token != getattr(self, "_local_scan_token", 0):
                 self._local_pulse_stop()
+                return                  # a newer scan owns the state now
+            if self.mode != "local":
+                # Left the section mid-walk: the walk stops here, so say so.
+                # Left marked active, the next visit took it for a walk still
+                # running and never started one - the library stayed half
+                # scanned for the rest of the session.
+                self._local_pulse_stop()
+                self._local_scan_active = False
+                self._local_scan_state = None
+                self._hide_busy()
                 return
             finished, cut = result
             self._local_cover_index = state.get("covers", {})
