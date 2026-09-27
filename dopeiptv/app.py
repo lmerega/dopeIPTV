@@ -222,10 +222,18 @@ def _install_crash_hooks() -> None:
         if _is_quiet(exc_type):
             return
         buf = io.StringIO()
-        buf.write("\n[dopeIPTV] CRASH: uncaught exception\n")
         traceback.print_exception(exc_type, exc_value, exc_tb, file=buf)
+        # Through the logger, so the traceback also lands in the log file
+        # (DOPEIPTV_LOG_FILE) that gets attached to bug reports, redacted
+        # like every other line; its stderr handler flushes each record.
         try:
-            sys.stderr.write(buf.getvalue())
+            log.error("CRASH: uncaught exception\n%s", buf.getvalue().rstrip())
+            return
+        except Exception:
+            pass
+        try:
+            sys.stderr.write("\n[dopeIPTV] CRASH: uncaught exception\n"
+                             + buf.getvalue())
             sys.stderr.flush()
         except Exception:
             pass

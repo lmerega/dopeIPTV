@@ -152,3 +152,39 @@ def test_the_client_registers_its_own_account():
     XtreamClient("http://box.example", "joe_smith", "hunter2pass")
     assert "hunter2pass" not in redact_url(
         "http://box.example/joe_smith/hunter2pass/9.ts")
+
+
+def test_an_uncaught_exception_reaches_the_log_masked():
+    # The crash hook wrote tracebacks to stderr only, so the log file that
+    # gets attached to a bug report never had the one thing that mattered -
+    # and nothing in it went through the masking either.
+    import sys
+    import threading
+
+    from dopeiptv import app
+
+    saved = (sys.excepthook, threading.excepthook, sys.unraisablehook)
+    records = []
+
+    class Grab(logging.Handler):
+        def emit(self, record):
+            records.append(record.getMessage())
+
+    h = Grab()
+    logmod.log.addHandler(h)
+    filt = _RedactFilter()
+    logmod.log.addFilter(filt)
+    try:
+        logmod.register_secrets("hunter2pw")
+        app._install_crash_hooks()
+        try:
+            raise ValueError("boom http://h.tv/u/hunter2pw/1.ts")
+        except ValueError as e:
+            sys.excepthook(type(e), e, e.__traceback__)
+    finally:
+        sys.excepthook, threading.excepthook, sys.unraisablehook = saved
+        logmod.log.removeHandler(h)
+        logmod.log.removeFilter(filt)
+    assert records and "CRASH" in records[0]
+    assert "ValueError: boom" in records[0]
+    assert "hunter2pw" not in records[0]
