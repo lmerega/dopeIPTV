@@ -162,3 +162,21 @@ def test_a_rename_or_move_never_replaces_another_recording(tmp_path):
     assert free_path(str(a)) == str(tmp_path / "Show (3).ts")
     assert free_path(str(a), current=str(a)) == str(a)    # renamed to itself
     assert free_path(str(tmp_path / "New.ts")) == str(tmp_path / "New.ts")
+
+
+def test_console_tools_never_open_a_window_on_windows(monkeypatch):
+    # A windowed Windows build has no console, so each ffmpeg got one of its
+    # own - for a recording, open the whole time, and closing it killed the
+    # recording. Everywhere else the flag must be 0 (Popen rejects others).
+    import importlib
+    import sys
+
+    from dopeiptv.core import player_exec
+    assert player_exec.NO_WINDOW == (0x08000000 if sys.platform == "win32"
+                                     else 0)
+    monkeypatch.setattr(sys, "platform", "win32")
+    try:
+        assert importlib.reload(player_exec).NO_WINDOW == 0x08000000
+    finally:
+        monkeypatch.undo()
+        importlib.reload(player_exec)

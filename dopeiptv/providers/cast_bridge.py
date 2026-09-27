@@ -38,6 +38,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from ..core.log import log
+from ..core.player_exec import NO_WINDOW
 
 # What a Cast receiver decodes. Anything outside these has to be re-encoded;
 # anything inside is copied through untouched.
@@ -168,7 +169,8 @@ def video_encoder() -> str:
         if exe:
             try:
                 out = subprocess.run([exe, "-hide_banner", "-encoders"],
-                                     capture_output=True, timeout=10).stdout
+                                     capture_output=True, timeout=10,
+                                     creationflags=NO_WINDOW).stdout
                 if b"h264_videotoolbox" in out:
                     _hw_encoder = "h264_videotoolbox"
             except Exception:
@@ -280,7 +282,7 @@ def probe_tracks(source: str, exe: str | None = None) -> dict:
                                    if "://" in source else []),
              "-print_format", "json", "-show_streams", "-show_format",
              source],
-            capture_output=True, timeout=25).stdout
+            capture_output=True, timeout=25, creationflags=NO_WINDOW).stdout
         probed = json.loads(raw or b"{}")
         streams = probed.get("streams", [])
         # The runtime comes along for the ride: a resume point is only worth
@@ -1414,7 +1416,8 @@ class CastBridge:
         log.info("cast bridge: starting ffmpeg")
         try:
             proc = subprocess.Popen(
-                args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=NO_WINDOW)
         except Exception as e:
             log.info("cast bridge: could not start ffmpeg (%s)", e)
             return None

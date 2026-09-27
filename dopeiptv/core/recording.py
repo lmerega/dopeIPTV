@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from PyQt6.QtCore import QObject, QSettings, QTimer, pyqtSignal
 
-from .player_exec import find_player_executable
+from .player_exec import NO_WINDOW, find_player_executable
 
 #: What the player sends, so a panel that plays a channel also records it.
 RECORD_UA = "dopeIPTV/1.0"
@@ -384,7 +384,8 @@ class RecordingManager(QObject):
         try:
             j["proc"] = subprocess.Popen(
                 cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, start_new_session=True)
+                stderr=subprocess.DEVNULL, start_new_session=True,
+                creationflags=NO_WINDOW)
             j["path"] = path
             j["status"] = "recording"
             if j.get("stream_icon"):

@@ -1290,9 +1290,15 @@ class _LocalFilesMixin:
         chained until the shelf is done, 30 s per file; a file ffmpeg can
         make nothing of is remembered so it is not tried again."""
         import hashlib
-        import shutil
         import subprocess
-        ff = shutil.which("ffmpeg")
+        # The same lookup the cast bridge uses: the ffmpeg shipped inside a
+        # frozen build first, then PATH and the usual install places. PATH
+        # alone found nothing in the Windows and macOS bundles (and nothing
+        # Homebrew-installed for an app launched from Finder), so those
+        # never got a single thumbnail.
+        from ..core.player_exec import NO_WINDOW
+        from ..providers.cast_bridge import ffmpeg_path
+        ff = ffmpeg_path()
         bad = getattr(self, "_local_thumb_fail", None)
         if bad is None:
             bad = self._local_thumb_fail = set()
@@ -1326,7 +1332,8 @@ class _LocalFilesMixin:
                                  "-y", tp],
                                 timeout=30, check=True,
                                 stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+                                stderr=subprocess.DEVNULL,
+                                creationflags=NO_WINDOW)
                             break
                         except Exception:
                             continue
