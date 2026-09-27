@@ -1127,13 +1127,12 @@ class EpgGridDialog(QDialog):
         m.exec(global_pos)
 
     def _record(self, ch: dict, p: dict) -> None:
-        if not self.window._within_storage_cap():
-            return
-        url = self.window.client.live_url(ch.get("stream_id"), "ts")
-        if not url:
-            return
-        self.window.rec.add_job(
-            url, ch.get("name") or p.get("title") or "recording",
-            max(time.time(), p["start_timestamp"]), p["stop_timestamp"],
-            icon=ch.get("stream_icon"))
+        # The detail panel's path, not a job of its own: a programme on the
+        # air now is recorded from the stream already playing when it is the
+        # channel on screen (one connection, and the prompt otherwise), where
+        # a job here always opened a second - which a single-connection
+        # account answers by cutting off the playback or the recording.
+        self.window._record_programme(
+            ch, {"title": p.get("title")},
+            p["start_timestamp"], p["stop_timestamp"])
         self.info.setText("● " + (p.get("title") or ch.get("name") or ""))

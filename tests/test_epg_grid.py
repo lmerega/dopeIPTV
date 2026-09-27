@@ -233,3 +233,21 @@ def test_epg_grid_interactions():
     assert "EPG_GRID_OK" in proc.stdout, (
         f"EPG grid checks failed\n"
         f"stdout={proc.stdout!r}\nstderr={proc.stderr[-2000:]!r}")
+
+
+def test_recording_from_the_guide_takes_the_detail_panels_path():
+    # The guide added a job of its own, so an on-air programme on the channel
+    # being watched opened a second connection instead of recording the
+    # stream already playing.
+    from types import SimpleNamespace
+    from unittest import mock
+
+    from dopeiptv.ui.epg_grid import EpgGridDialog
+
+    win = SimpleNamespace(_record_programme=mock.Mock())
+    ch = {"stream_id": 5, "name": "One"}
+    p = {"title": "News", "start_timestamp": 100.0, "stop_timestamp": 200.0}
+    info = mock.Mock()
+    EpgGridDialog._record(SimpleNamespace(window=win, info=info), ch, p)
+    win._record_programme.assert_called_once_with(
+        ch, {"title": "News"}, 100.0, 200.0)
