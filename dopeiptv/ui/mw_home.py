@@ -203,15 +203,38 @@ class _Card(QFrame):
         super().leaveEvent(e)
 
     def mousePressEvent(self, e) -> None:
-        # Base class FIRST, then emit: the click handler leaves Home and
-        # rebuilds the shelves synchronously, which deletes this very card -
-        # touching self afterwards crashed with "wrapped C/C++ object of type
-        # _Card has been deleted".
-        super().mousePressEvent(e)
+        # Nothing happens on press: a card acts on release, like a button.
+        e.accept()
+
+    def mouseReleaseEvent(self, e) -> None:
+        # Act on RELEASE, and only once the event has been fully delivered.
+        #
+        # A click opens things that run their own event loop - the "resume
+        # where you left off?" dialog, the recording guard, a context menu -
+        # and it leaves Home, which deletes this very card. Emitting from
+        # inside the press handler ran all of that while Qt still held the
+        # press as an implicit mouse grab on this card. Closing the resume
+        # dialog with the window's close button (where Qt sees no press or
+        # release of its own inside the dialog) left that grab pointing at a
+        # card that was deleted meanwhile, and the next mouse event crashed
+        # the app in QApplication::notify - the macOS crash from "Continue
+        # watching". Released and deferred, the click is over and the grab
+        # is gone before anything opens.
+        e.accept()
+        if not self.rect().contains(e.position().toPoint()):
+            return                     # dragged off the card: no click
         if e.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+            sig = self.clicked
         elif e.button() == Qt.MouseButton.RightButton:
-            self.right_clicked.emit()
+            sig = self.right_clicked
+        else:
+            return
+
+        def fire() -> None:
+            from PyQt6 import sip
+            if not sip.isdeleted(self):
+                sig.emit()
+        QTimer.singleShot(0, fire)
 
 
 class _Shelf(QWidget):

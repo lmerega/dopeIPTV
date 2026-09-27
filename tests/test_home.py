@@ -186,3 +186,87 @@ def test_is_movie_filters_live_channels():
     assert not is_movie({"stream_id": 3, "stream_type": "live"})
     assert not is_movie({"stream_id": 4, "stream_type": "radio"})
     assert not is_movie({"stream_type": "movie"})          # no id, not a movie
+
+
+_CARD_CHILD = r"""
+import os
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6 import sip
+from PyQt6.QtCore import QEventLoop, QPoint, Qt, QTimer
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+
+from dopeiptv.ui.mw_home import _Card
+
+app = QApplication.instance() or QApplication([])
+L = Qt.MouseButton.LeftButton
+R = Qt.MouseButton.RightButton
+
+# What a real click does: open something with its own event loop (the
+# resume dialog) and leave Home, which deletes the card that was clicked.
+card = _Card(160, 240, "Halfway Movie")
+card.show()
+seen = []
+def act():
+    seen.append("clicked")
+    loop = QEventLoop()
+    QTimer.singleShot(0, loop.quit)
+    loop.exec()
+    card.deleteLater()
+card.clicked.connect(act)
+
+QTest.mousePress(card, L, pos=QPoint(20, 20))
+assert seen == [], "a card must not act on press"
+QTest.mouseRelease(card, L, pos=QPoint(20, 20))
+assert seen == [], "a card must not act inside the mouse event"
+app.processEvents()
+assert seen == ["clicked"], seen
+app.processEvents()
+app.sendPostedEvents(None, 0)
+assert sip.isdeleted(card)
+
+# Released outside the card (dragged off): no click.
+c2 = _Card(160, 240, "x"); c2.show()
+hits = []
+c2.clicked.connect(lambda: hits.append(1))
+QTest.mousePress(c2, L, pos=QPoint(10, 10))
+QTest.mouseRelease(c2, L, pos=QPoint(900, 900))
+app.processEvents()
+assert hits == [], hits
+
+# Right button reaches right_clicked, not clicked.
+rights = []
+c2.right_clicked.connect(lambda: rights.append(1))
+QTest.mousePress(c2, R, pos=QPoint(10, 10))
+QTest.mouseRelease(c2, R, pos=QPoint(10, 10))
+app.processEvents()
+assert rights == [1] and hits == [], (rights, hits)
+
+# A card deleted between the release and the deferred emit stays quiet.
+c3 = _Card(160, 240, "y"); c3.show()
+c3.clicked.connect(lambda: hits.append("late"))
+QTest.mouseRelease(c3, L, pos=QPoint(10, 10))
+sip.delete(c3)
+app.processEvents()
+assert hits == [], hits
+print("CARD_OK")
+"""
+
+
+def test_a_home_card_acts_after_the_click_not_inside_it():
+    """The macOS crash on dismissing the resume prompt with the window's
+    close button: the card emitted from inside its press handler, so the
+    prompt's event loop and the Home teardown that deletes the card both
+    ran while Qt still held the press as a grab on it. The card now acts on
+    release, after the event has been delivered."""
+    try:
+        import PyQt6  # noqa: F401
+    except Exception:
+        pytest.skip("PyQt6 not available")
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+    proc = subprocess.run(
+        [sys.executable, "-c", _CARD_CHILD], capture_output=True, text=True,
+        env=env, cwd=_REPO_ROOT, timeout=120)
+    assert "CARD_OK" in proc.stdout, (
+        f"card checks failed\n"
+        f"stdout={proc.stdout!r}\nstderr={proc.stderr[-2000:]!r}")
