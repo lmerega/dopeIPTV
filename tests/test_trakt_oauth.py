@@ -107,3 +107,66 @@ def test_loopback_cancel_returns_none():
     cancel["v"] = True
     th.join(5)
     assert out["r"] is None
+
+
+class _TokenResp:
+    def __init__(self, code, body=None):
+        self.status_code = code
+        self._body = body or {}
+
+    def json(self):
+        return self._body
+
+
+def test_an_expiring_token_is_refreshed_before_the_call(monkeypatch):
+    # The refresh token and expiry were stored and never read: when the
+    # access token ran out, Trakt stopped working without a word.
+    posts = []
+
+    def fake_post(url, json=None, timeout=None):
+        posts.append(json)
+        return _TokenResp(200, {"access_token": "AT2", "refresh_token": "RT2",
+                                "expires_in": 86400})
+
+    monkeypatch.setattr(T.requests, "post", fake_post)
+    tc = _client("refresh_due")
+    tc.settings.setValue("trakt_access_token", "AT1")
+    tc.settings.setValue("trakt_refresh_token", "RT1")
+    tc.settings.setValue("trakt_expires_at", int(time.time()) + 60)
+    h = tc._headers()
+    assert h["Authorization"] == "Bearer AT2"
+    assert posts[0]["grant_type"] == "refresh_token"
+    assert posts[0]["refresh_token"] == "RT1"
+    assert tc.refresh_token == "RT2"
+    tc._headers()
+    assert len(posts) == 1                       # fresh now: no second call
+
+
+def test_a_valid_token_is_left_alone(monkeypatch):
+    def no_post(*_a, **_k):
+        raise AssertionError("refreshed a token that is still valid")
+
+    monkeypatch.setattr(T.requests, "post", no_post)
+    tc = _client("refresh_not_due")
+    tc.settings.setValue("trakt_access_token", "AT1")
+    tc.settings.setValue("trakt_refresh_token", "RT1")
+    tc.settings.setValue("trakt_expires_at", int(time.time()) + 86400)
+    assert tc._headers()["Authorization"] == "Bearer AT1"
+
+
+def test_a_refused_refresh_tries_the_oob_uri_then_backs_off(monkeypatch):
+    posts = []
+
+    def fake_post(url, json=None, timeout=None):
+        posts.append(json["redirect_uri"])
+        return _TokenResp(401)
+
+    monkeypatch.setattr(T.requests, "post", fake_post)
+    tc = _client("refresh_refused")
+    tc.settings.setValue("trakt_access_token", "AT1")
+    tc.settings.setValue("trakt_refresh_token", "RT1")
+    tc.settings.setValue("trakt_expires_at", int(time.time()) - 5)
+    assert tc._headers()["Authorization"] == "Bearer AT1"
+    assert posts == [T.REDIRECT_URI, T.OOB_REDIRECT_URI]
+    tc._headers()
+    assert len(posts) == 2                       # backed off, no hammering

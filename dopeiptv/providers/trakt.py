@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 from ..core._lazy_requests import requests
+from ..core.log import log
 from PyQt6.QtCore import QSettings
 
 API = "https://api.trakt.tv"
@@ -16,6 +18,12 @@ API_VERSION = "2"
 # is served by a one-shot local HTTP server (see providers/oauth_loopback.py).
 OAUTH_PORT = 41794
 REDIRECT_URI = f"http://127.0.0.1:{OAUTH_PORT}/callback"
+# The device-code sign-in has no redirect; Trakt's out-of-band URI stands in.
+OOB_REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob"
+# Refresh this long before the access token runs out.
+REFRESH_MARGIN = 600
+# After a failed refresh, wait this long before trying again.
+REFRESH_BACKOFF = 300
 
 # dopeIPTV's own registered Trakt application, bundled so users get a true
 # one-click "Sign in with Trakt" with zero setup. A user who prefers their own
@@ -38,6 +46,10 @@ class TraktClient:
 
     def __init__(self, settings: QSettings) -> None:
         self.settings = settings
+        # A refresh token is single-use: two workers refreshing at once would
+        # leave one of them holding a token Trakt has already retired.
+        self._refresh_lock = threading.Lock()
+        self._refresh_retry_at = 0.0
 
     # -- credentials / tokens (persisted via QSettings) ---------------------
 
@@ -144,9 +156,64 @@ class TraktClient:
         raise TraktAuthError(
             f"Trakt rejected the sign-in (HTTP {r.status_code}).")
 
+    # -- token refresh --------------------------------------------------------
+
+    def _expires_at(self) -> int:
+        try:
+            return int(self.settings.value("trakt_expires_at", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _token_due(self) -> bool:
+        exp = self._expires_at()
+        return bool(self.refresh_token and exp
+                    and time.time() >= exp - REFRESH_MARGIN)
+
+    def refresh_tokens(self) -> bool:
+        """Trade the refresh token for a new access token and store both.
+
+        Without this the app never renewed anything: the stored refresh
+        token and expiry went unread, and when the access token ran out
+        every Trakt call failed quietly until the user signed in again."""
+        tried: list[str] = []
+        for uri in (REDIRECT_URI, OOB_REDIRECT_URI):
+            try:
+                r = requests.post(
+                    f"{API}/oauth/token",
+                    json={"refresh_token": self.refresh_token,
+                          "client_id": self.client_id,
+                          "client_secret": self.client_secret,
+                          "redirect_uri": uri,
+                          "grant_type": "refresh_token"},
+                    timeout=15)
+            except requests.RequestException as e:
+                log.warning("trakt: token refresh failed - %s",
+                            type(e).__name__)
+                self._refresh_retry_at = time.monotonic() + REFRESH_BACKOFF
+                return False
+            if r.status_code in (200, 201):
+                self._store_tokens(r.json())
+                log.info("trakt: access token refreshed")
+                return True
+            tried.append(str(r.status_code))
+        log.warning("trakt: token refresh refused (HTTP %s) - sign in to "
+                    "Trakt again", "/".join(tried))
+        self._refresh_retry_at = time.monotonic() + REFRESH_BACKOFF
+        return False
+
+    def _ensure_fresh_token(self) -> None:
+        if not self._token_due():
+            return
+        with self._refresh_lock:
+            if (not self._token_due()
+                    or time.monotonic() < self._refresh_retry_at):
+                return
+            self.refresh_tokens()
+
     # -- headers --------------------------------------------------------------
 
     def _headers(self) -> dict:
+        self._ensure_fresh_token()
         return {
             "Content-Type": "application/json",
             "trakt-api-version": API_VERSION,
