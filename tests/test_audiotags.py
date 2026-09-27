@@ -69,3 +69,27 @@ def test_a_track_with_no_number_keeps_its_title(tmp_path):
     f = tmp_path / "x.flac"
     _flac(f, [b"TITLE=Runaway", b"ARTIST=Kanye West"])
     assert display_name(str(f)) == "Runaway"
+
+
+def _mp3_with_cover(path, enc, desc):
+    body = bytes([enc]) + b"image/jpeg\x00" + b"\x03" + desc + b"JPEGDATA"
+    frame = b"APIC" + len(body).to_bytes(4, "big") + b"\x00\x00" + body
+    n = len(frame)
+    sync = bytes([(n >> 21) & 0x7F, (n >> 14) & 0x7F, (n >> 7) & 0x7F,
+                  n & 0x7F])
+    path.write_bytes(b"ID3\x03\x00\x00" + sync + frame)
+
+
+def test_id3_cover_after_a_utf16_description(tmp_path):
+    # A UTF-16 description ends in two zero bytes; reading up to the first
+    # single zero stopped inside the first character and the "cover" began
+    # with the rest of the description.
+    cases = ((0, b"Front\x00"), (3, b"Front\x00"),
+             (1, b"\xff\xfeF\x00r\x00\x00\x00"),
+             (1, b"\xff\xfe\x00\x00"),
+             (2, b"\x00F\x00r\x00\x00"))
+    for i, (enc, desc) in enumerate(cases):
+        f = tmp_path / f"c{i}.mp3"
+        _mp3_with_cover(f, enc, desc)
+        assert read_tags(str(f), want_cover=True)[1] == b"JPEGDATA", (enc,
+                                                                    desc)

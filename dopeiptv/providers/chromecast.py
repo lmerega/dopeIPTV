@@ -1247,7 +1247,7 @@ class CastDialog(QDialog):
                 pass                       # dialog closed while probing
 
         run_async(self.window.pool, lambda: probe_tracks(self.url), done,
-                  lambda _msg: self._fill_tracks({}))
+                  lambda _msg: done({}))
 
     @staticmethod
     def _track_label(t: dict) -> str:

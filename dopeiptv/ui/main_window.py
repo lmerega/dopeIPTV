@@ -4999,7 +4999,7 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
         log.info("cast: stopping - %s", why)
         threading.Thread(target=cc.stop, daemon=True).start()
 
-    def stop_local_playback_for_cast(self) -> None:
+    def stop_local_playback_for_cast(self) -> bool:
         """Free the local stream when a cast starts. The Chromecast pulls the
         URL itself (one connection from the device), so on a single-connection
         account leaving the embedded player running too would be a second

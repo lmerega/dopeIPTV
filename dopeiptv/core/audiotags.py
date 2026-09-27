@@ -147,8 +147,17 @@ def _id3(fh) -> tuple[dict, bytes | None]:
                 else:
                     q = 4                     # 3-char image format
                 q += 1                        # picture type
-                zero = body.index(b"\x00", q)
-                cover = body[zero + 1:] or None
+                if body[0] in (1, 2):
+                    # UTF-16 description: its terminator is two zero bytes
+                    # on a character boundary - a single zero is just half
+                    # of an ASCII character.
+                    zero = body.index(b"\x00\x00", q)
+                    while (zero - q) % 2:
+                        zero = body.index(b"\x00\x00", zero + 1)
+                    cover = body[zero + 2:] or None
+                else:
+                    zero = body.index(b"\x00", q)
+                    cover = body[zero + 1:] or None
             except ValueError:
                 cover = None
     return tags, cover

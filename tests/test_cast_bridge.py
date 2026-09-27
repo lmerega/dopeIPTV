@@ -374,7 +374,7 @@ def test_a_request_never_spawns_into_a_stream_that_replaced_it():
     cb.time.sleep = lambda s: b.start("http://p/other.mkv", ["h264"])
     try:
         proc, head = b.first_frames()
-        assert proc is None and head == b""
+        assert proc is None and head is None
         # One attempt for the run it belongs to, and nothing for the new one.
         assert runs == ["http://p/film.mkv"], runs
     finally:

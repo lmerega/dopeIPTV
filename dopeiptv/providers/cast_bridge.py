@@ -1371,7 +1371,7 @@ class CastBridge:
             if self.generation != mine:
                 log.info("cast bridge: this request belongs to a stream that "
                          "has been replaced - letting it go")
-                return None, b""
+                return None, None
             proc = self.spawn()
             if proc is None:
                 return None, None
