@@ -283,17 +283,25 @@ class _DetailMixin:
         # image.tmdb.org URL - the panel's own proxy is often the one
         # that's 404ing/down. Same rewrite the list delegate uses.
         fallback_url = tmdb_url_from_provider(raw_cover) or raw_cover
+        key = self._current_key
+
+        def logo(pm) -> None:
+            # Only for the row still selected: an image arriving after the
+            # user has arrowed on painted the previous row's art on this one.
+            # A failed load (a null pixmap) keeps the placeholder letter.
+            if key == self._current_key and pm is not None and not pm.isNull():
+                self._set_detail_logo(pm)
+
         if not (is_media and self.tmdb):
             if fallback_url:
-                self.poster_art.get(fallback_url, self._set_detail_logo)
+                self.poster_art.get(fallback_url, logo)
             return
         title = self._media_title_for_tmdb(it)
         if not title:
             if fallback_url:
-                self.poster_art.get(fallback_url, self._set_detail_logo)
+                self.poster_art.get(fallback_url, logo)
             return
         kind = kind or ("vod" if self.mode == "vod" else "series")
-        key = self._current_key
 
         def apply(details: dict) -> None:
             if key != self._current_key:
@@ -301,13 +309,13 @@ class _DetailMixin:
             self._apply_media_card(details)
             url = details.get("poster_url") or fallback_url
             if url:
-                self.poster_art.get(url, self._set_detail_logo)
+                self.poster_art.get(url, logo)
 
         details = self.tmdb.get_full(title, kind, apply)
         if details is not None:
             apply(details)
         elif fallback_url:
-            self.poster_art.get(fallback_url, self._set_detail_logo)
+            self.poster_art.get(fallback_url, logo)
 
     def _apply_media_card(self, details: dict) -> None:
         self._tmdb_details = details
