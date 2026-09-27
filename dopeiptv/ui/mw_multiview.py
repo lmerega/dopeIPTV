@@ -46,6 +46,16 @@ def _fmt(secs: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+def _as_int(v) -> int:
+    # Provider flags come as ints, numeric strings or junk; the main window
+    # reads them defensively and so must a cell, or adding a channel whose
+    # tv_archive_duration is "7.0" raised instead of playing it.
+    try:
+        return int(float(v or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _glyph(kind: str, s: int, alpha: int = 235) -> QPixmap:
     """White vector control glyphs (pause / play). Drawn, not text: the ⏸/▶
     characters take their emoji presentation on macOS and render as black
@@ -380,10 +390,10 @@ class _MultiviewCell(QWidget):
         self._want_sid = None
         # Catch-up capable? Needs the provider flag, a real depth, a stream id
         # and a client that can build archive URLs.
-        days = int((item or {}).get("tv_archive_duration") or 0) if item else 0
+        days = _as_int((item or {}).get("tv_archive_duration"))
         self._ts_days = days
         self._ts_capable = bool(
-            item and int((item or {}).get("tv_archive") or 0) and days > 0
+            item and _as_int((item or {}).get("tv_archive")) and days > 0
             and (item or {}).get("stream_id") is not None
             and client is not None and hasattr(client, "timeshift_urls"))
         self._live_start = None    # fresh rolling window for the new stream

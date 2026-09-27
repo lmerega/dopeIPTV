@@ -254,3 +254,13 @@ def test_multiview_grid_and_focus():
     assert "MULTIVIEW_OK" in proc.stdout, (
         f"multiview checks failed\n"
         f"stdout={proc.stdout!r}\nstderr={proc.stderr[-2000:]!r}")
+
+
+def test_archive_flags_are_read_defensively():
+    from dopeiptv.ui.mw_multiview import _as_int
+    assert _as_int(7) == 7
+    assert _as_int("7") == 7
+    assert _as_int("7.0") == 7
+    assert _as_int(None) == 0
+    assert _as_int("") == 0
+    assert _as_int("yes") == 0
