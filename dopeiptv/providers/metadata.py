@@ -329,6 +329,10 @@ class PosterResolver(QObject):
             _tmdb_dbg(f"cache prune: dropped {before - len(self._cache)} "
                       f"no-poster entries for re-match")
         self._pending: set[str] = set()
+        # Lookups that errored (timeout, 5xx, offline) this session. Kept out
+        # of _cache, which is persisted: a network hiccup stored as "no
+        # match" left that title without a poster for good.
+        self._failed: set[str] = set()
         self._waiting: dict[str, list[Callable]] = {}
         self._dirty = False
         # tmdb-id lookup cache ("vod:123"/"series:456" -> {name, poster}).
@@ -533,6 +537,7 @@ class PosterResolver(QObject):
             else:
                 _tmdb_dbg(f"NOMATCH q={q!r} raw={raw!r}")
             self._cache[key] = details or {}
+            self._failed.discard(key)
             self._save()
             self._pending.discard(key)
             self._on_resolved(key)
@@ -545,7 +550,7 @@ class PosterResolver(QObject):
             # callbacks the same way done() does so the row actually
             # gets a repaint instead of freezing on the placeholder.
             _tmdb_dbg(f"ERROR  q={q!r} raw={raw!r} {str(msg)[:80]}")
-            self._cache[key] = {}
+            self._failed.add(key)
             self._pending.discard(key)
             self._on_resolved(key)
 
@@ -660,7 +665,8 @@ class PosterResolver(QObject):
         flicker reads as a 'double load' during the first pass."""
         if not title:
             return True
-        return self._key(title, kind) in self._cache
+        key = self._key(title, kind)
+        return key in self._cache or key in self._failed
 
     def get_full(self, title: str, kind: str,
                  callback: Callable[[dict], None]) -> dict | None:
@@ -671,6 +677,8 @@ class PosterResolver(QObject):
         key = self._key(title, kind)
         if key in self._cache:
             return self._cache[key]
+        if key in self._failed:
+            return {}
         self._waiting.setdefault(key, []).append(callback)
         self._ensure_fetch(title, kind, key)
         return None
@@ -706,9 +714,14 @@ class PosterResolver(QObject):
                     pass
 
         def fail(_msg, key=key):
-            self._person_cache[key] = []
+            # Not cached: a transient error must not read as "no credits"
+            # for good. The waiting panel still gets its (empty) answer.
             self._person_pending.discard(key)
-            self._person_waiting.pop(key, None)
+            for cb in self._person_waiting.pop(key, []):
+                try:
+                    cb([])
+                except RuntimeError:
+                    pass
 
         run_async(self.pool, fetch, done, fail)
         return None
@@ -746,7 +759,11 @@ class PosterResolver(QObject):
 
         def fail(_msg, key=key):
             self._person_id_pending.discard(key)
-            self._person_id_waiting.pop(key, None)
+            for cb in self._person_id_waiting.pop(key, []):
+                try:
+                    cb(None)
+                except RuntimeError:
+                    pass
 
         run_async(self.pool, fetch, done, fail)
         return None

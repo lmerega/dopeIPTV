@@ -209,6 +209,51 @@ def test_is_resolved_true_after_error(qapp, settings):
         "so the delegate can fall back to stream_icon")
 
 
+def test_an_error_is_not_saved_as_no_match(qapp, settings):
+    """A timeout or 5xx was cached as {} - and _cache is persisted, so the
+    next save wrote it to disk and that title never got a poster again,
+    not even after a restart."""
+    from dopeiptv.providers.metadata import PosterResolver
+    client = MagicMock()
+    client.fetch_details.side_effect = RuntimeError("timeout")
+    r = PosterResolver(_pool(), settings, client)
+    r.get_full("Flaky", "vod", lambda d: None)
+    _drain_pool(r.pool, qapp)
+    assert r.get_full("Flaky", "vod", lambda d: None) == {}
+    assert client.fetch_details.call_count == 1       # no retry storm
+    client.fetch_details.side_effect = None
+    client.fetch_details.return_value = {"tmdb_id": 5, "poster_url": "p"}
+    r.get_full("Other", "vod", lambda d: None)        # triggers a save
+    _drain_pool(r.pool, qapp)
+    r.flush()
+
+    r2 = PosterResolver(_pool(), settings, client)
+    assert r2.is_resolved("Flaky", "vod") is False
+    got = []
+    r2.get_full("Flaky", "vod", lambda d: got.append(d))
+    _drain_pool(r2.pool, qapp)
+    assert got == [{"tmdb_id": 5, "poster_url": "p"}]
+
+
+def test_person_lookups_answer_waiting_panels_on_error(qapp, settings):
+    from dopeiptv.providers.metadata import PosterResolver
+    client = MagicMock()
+    client.person_credits.side_effect = RuntimeError("offline")
+    client.search_person.side_effect = RuntimeError("offline")
+    r = PosterResolver(_pool(), settings, client)
+    credits, pid = [], []
+    assert r.get_person_credits(7, credits.append) is None
+    assert r.resolve_person_id("Some One", pid.append) is None
+    _drain_pool(r.pool, qapp)
+    assert credits == [[]] and pid == [None]
+    client.person_credits.side_effect = None
+    client.person_credits.return_value = ["Film"]
+    again = []
+    assert r.get_person_credits(7, again.append) is None   # not cached
+    _drain_pool(r.pool, qapp)
+    assert again == [["Film"]]
+
+
 # -- LogoLoader: disk cache, dead-URL blacklist ------------------------------
 
 
@@ -283,6 +328,51 @@ def test_logo_loader_corrupt_disk_file_recovers(qapp, tmp_path, monkeypatch):
     # Corrupt file was replaced with the freshly-fetched bytes.
     assert dp.exists()
     assert dp.read_bytes() == red_png
+
+
+def test_logo_loader_a_non_image_200_is_not_fetched_on_every_paint(
+        qapp, tmp_path, monkeypatch):
+    """A panel answering 200 with an HTML page: the bytes went to disk,
+    failed to decode, nobody was told, and the next paint deleted the file
+    and fetched it again - forever."""
+    from dopeiptv.core.workers import LogoLoader
+
+    calls = {"n": 0}
+
+    class Html:
+        status_code = 200
+        content = b"<html>login</html>"
+        def raise_for_status(self): pass
+
+    def fake_get(url, headers=None, timeout=None):
+        calls["n"] += 1
+        return Html()
+
+    monkeypatch.setattr("dopeiptv.core.workers.requests.get", fake_get)
+    pool = _pool()
+    loader = LogoLoader(pool, max_size=16, cache_dir=tmp_path)
+    url = "https://cdn/html.jpg"
+    got = []
+    loader.get(url, got.append)
+    _drain_pool(pool, qapp)
+    assert len(got) == 1 and got[0].isNull()          # the waiter is told
+    assert loader.is_dead(url)
+    assert not any(p.is_file() for p in tmp_path.rglob("*"))
+    assert calls["n"] == 1
+
+
+def test_logo_loader_trimming_keeps_a_shared_dead_map(qapp):
+    from dopeiptv.core.workers import LogoLoader
+
+    a = LogoLoader(_pool(), max_size=16)
+    b = LogoLoader(_pool(), max_size=16)
+    b.dead = a.dead                                   # as the window does
+    a.DEAD_CAP = 3
+    for i in range(6):
+        a._mark_dead(f"https://x/{i}", 100 + i)
+    assert b.dead is a.dead
+    assert len(a.dead) == 3
+    assert set(a.dead) == {"https://x/3", "https://x/4", "https://x/5"}
 
 
 def test_logo_loader_marks_404_dead_long_ttl(qapp, tmp_path, monkeypatch):

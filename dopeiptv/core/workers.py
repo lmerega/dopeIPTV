@@ -356,16 +356,22 @@ class LogoLoader(QObject):
     DEAD_CAP = 4096
 
     def _mark_dead(self, url: str, ttl: float) -> None:
+        # Trimmed in place, never rebound: the window hands one dict to both
+        # image loaders, and a new dict here quietly ended that sharing.
         self.dead[url] = time.monotonic() + ttl
         if len(self.dead) > self.DEAD_CAP:
             now = time.monotonic()
-            self.dead = {u: t for u, t in self.dead.items() if t > now}
+            entries = list(self.dead.items())
+            for u, t in entries:
+                if t <= now:
+                    self.dead.pop(u, None)
             if len(self.dead) > self.DEAD_CAP:
                 # Still over after dropping expired ones: keep the entries
                 # with the longest remaining cooldown (permanent 404s), the
                 # short transient cooldowns are the cheapest to re-learn.
-                keep = sorted(self.dead.items(), key=lambda kv: kv[1])
-                self.dead = dict(keep[-self.DEAD_CAP:])
+                ranked = sorted(self.dead.items(), key=lambda kv: kv[1])
+                for u, _t in ranked[:len(ranked) - self.DEAD_CAP]:
+                    self.dead.pop(u, None)
 
     def _strike_host(self, url: str) -> None:
         host = self._host_of(url)
@@ -517,7 +523,10 @@ class LogoLoader(QObject):
             r.raise_for_status()
             data = r.content
             _img_dbg(f"net {r.status_code} ok {len(data)}B {u}")
-            if dp is not None:
+            # A 200 that is not an image (a panel's HTML error page) must not
+            # reach the disk cache: the next paint read it back, found it
+            # corrupt, deleted it and fetched again - on every paint.
+            if dp is not None and QImage().loadFromData(data):
                 try:
                     dp.parent.mkdir(parents=True, exist_ok=True)
                     # Write to a sibling temp path and rename so a crash
@@ -540,7 +549,13 @@ class LogoLoader(QObject):
                 return
             pm = QPixmap()
             if not pm.loadFromData(data):
-                _img_dbg(f"DECODE FAILED {len(data)}B {u}")
+                _img_dbg(f"DECODE FAILED {len(data)}B DEAD(1h) {u}")
+                self._mark_dead(u, self.dead_ttl_permanent)
+                for cb in callbacks:
+                    try:
+                        cb(QPixmap())
+                    except RuntimeError:
+                        pass
                 return
             pm = pm.scaled(self.max_size, self.max_size,
                            Qt.AspectRatioMode.KeepAspectRatio,
