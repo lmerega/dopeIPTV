@@ -62,7 +62,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     # ── Navigation / sidebar ──────────────────────────────────────────────
 
     "nav_home": {"en": "Home"},
-    "home_featured": {"en": "Featured"},
     "home_resume": {"en": "Continue watching"},
     "home_fav_now": {"en": "On your favorites now"},
     "err_series_open": {"en": "Couldn't open this series (the provider refused the request)."},
@@ -222,28 +221,16 @@ _STRINGS: dict[str, dict[str, str]] = {
     "epg_jump_now": {"en": "Now"},
     "epg_jump_playing": {"en": "Playing"},
     "epg_play_channel": {"en": "Play channel"},
-    "epg_no_programme": {"en": "No current programme data"},
-    "epg_now_prefix": {"en": "Now"},
     "epg_day_back": {"en": "1 day back"},
     "epg_day_fwd": {"en": "1 day forward"},
     "epg_tonight": {"en": "Tonight"},
-    "epg_record_hint": {"en": "Right-click an upcoming or currently-airing programme to record it (multi-select works too)."},
-    "epg_channels_count": {"en": "{n} channels"},
-    "epg_channels_first": {"en": "(first {n})"},
     "btn_add": {"en": "Add…"},
     "btn_edit": {"en": "Edit…"},
     "btn_remove": {"en": "Remove"},
     "btn_export": {"en": "Export…"},
     "btn_import": {"en": "Import…"},
-    "btn_close": {"en": "Close"},
-    "btn_ok": {"en": "Ok"},
-    "btn_cancel": {"en": "Cancel"},
-    "btn_save": {"en": "Save"},
-    "btn_search": {"en": "Search"},
     "btn_connect": {"en": "Connect"},
-    "welcome_title": {"en": "Welcome to dopeIPTV"},
     "welcome_subtitle": {"en": "Connect your IPTV provider to load your channels, movies and series — or just look around first."},
-    "welcome_connect": {"en": "Connect your provider"},
     "welcome_explore": {"en": "Continue without account"},
     "onb_try_demo": {"en": "🎬 Try demo channels"},
     "demo_notice": {"en": "Demo mode: a few free public test streams so you can try the app. They're third-party services, so playback isn't guaranteed. Add your own provider any time for the full experience."},
@@ -265,11 +252,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "onb_trakt_connected": {"en": "✓ Trakt connected — your watch history will sync."},
     "onb_trakt_reconnect": {"en": "Reconnect Trakt"},
     "onb_finish_done": {"en": "Done — start watching"},
-    "onb_limited_notice": {"en": "You're exploring without a provider, so the app is limited. Add one any time with the “+ Add provider” button in the middle."},
     "sort_global": {"en": "Global default"},
     "sort_scope_hint": {"en": "Sort order for this category. Pick “Global default” to follow the app-wide setting."},
     "tooltip_toggle_sidebar": {"en": "Collapse the sidebar to icons (Ctrl+B)"},
-    "nav_set_color": {"en": "Set color…"},
     "nav_set_text_color": {"en": "Set text color…"},
     "nav_set_bg_color": {"en": "Set background color…"},
     "nav_reset_color": {"en": "Reset color"},
@@ -289,11 +274,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "onb_add_provider": {"en": "+ Add provider"},
     "welcome_add_hint": {"en": "No provider yet — add one any time in Settings."},
     "btn_use": {"en": "Use"},
-    "btn_watch": {"en": "Watch"},
-    "btn_play_channel": {"en": "Play channel"},
     "btn_back_to_series": {"en": "Back to series"},
     "btn_back": {"en": "Back"},
-    "btn_clear_history": {"en": "Clear history"},
     "btn_grid": {"en": "Grid"},
 
     # ── Tooltips ───────────────────────────────────────────────────────────
@@ -331,12 +313,9 @@ _STRINGS: dict[str, dict[str, str]] = {
     "status_refreshing_playlist": {"en": "Refreshing playlist…"},
     "status_connecting": {"en": "Connecting to {name}…"},
     "status_loading_programme_guide": {"en": "Loading programme guide…"},
-    "status_loading_programme_guide_pct": {"en": "Loading programme guide... {pct}%"},
     "status_playing": {"en": "Playing: {title}"},
     "chan_entry": {"en": "Channel: {num}"},
     "chan_not_found": {"en": "No channel #{num}"},
-    "status_no_favorites": {"en": "No favorites yet - right-click a channel in TV to add one."},
-    "status_no_history": {"en": "No watch history yet."},
     "status_reconnecting": {"en": "Reconnecting…"},
     "status_stream_dropped": {"en": "Live stream dropped — double-click to reconnect"},
     "update_status": {"en": "Update available ({version})"},
@@ -395,20 +374,10 @@ _STRINGS: dict[str, dict[str, str]] = {
     # ── Search ────────────────────────────────────────────────────────────
 
     "search_placeholder": {"en": "Search channels, movies or series…"},
-    "search_filter_channels": {"en": "Filter channels…"},
 
     # ── Detail panel / metadata labels ────────────────────────────────────
 
-    "detail_genre": {"en": "Genre"},
-    "detail_director": {"en": "Director"},
-    "detail_released": {"en": "Released"},
-    "detail_duration": {"en": "Duration"},
-    "detail_rating": {"en": "Rating"},
-    "detail_cast": {"en": "Cast"},
-    "detail_no_info": {"en": "No further information available."},
-    "detail_loading_info": {"en": "Loading information…"},
     "detail_select_something": {"en": "Select something from the list"},
-    "detail_select_channel": {"en": "Select a channel"},
 
     # ── Recording ─────────────────────────────────────────────────────────
 
@@ -439,18 +408,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "rec_record_now_duration": {"en": "Record now - {duration}"},
     "rec_schedule_recording": {"en": "Schedule recording…"},
     "rec_open_recordings": {"en": "Open Recordings"},
-    "rec_recording_n_streams": {"en": "Recording {n} stream(s)…"},
-
-    # ── Cast popup ────────────────────────────────────────────────────────
-
-    "cast_other_titles": {"en": "other titles in your playlist"},
-    "cast_looking_up": {"en": "Looking up filmography…"},
-    "cast_searching_playlist": {"en": "Searching your playlist…"},
-    "cast_no_matches": {"en": "No other titles from this playlist matched."},
-    "cast_titles_found": {"en": "{count} title(s) found in your playlist"},
-    "cast_double_click": {"en": "double-click to open"},
-    "cast_find_other_titles": {"en": "Find other titles with {name} in your playlist"},
-    "cast_looking_up_member": {"en": "Looking up cast member…"},
 
     # ── About / menu ──────────────────────────────────────────────────────
 
@@ -463,7 +420,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "about_update_available": {"en": "A new version is available: {version}"},
     "about_check_failed": {"en": "Couldn't check for updates right now."},
     "about_download": {"en": "Download the update"},
-    "about_check_again": {"en": "Check again"},
     "about_check_updates": {"en": "Check for updates"},
     "about_tmdb_credit": {"en": "Movie and TV metadata and artwork provided by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB."},
     "menu_about": {"en": "About dopeIPTV"},
@@ -480,14 +436,6 @@ _STRINGS: dict[str, dict[str, str]] = {
 
     # ── Labels for item counts ────────────────────────────────────────────
 
-    "label_channels": {"en": "channels"},
-    "label_movies": {"en": "movies"},
-    "label_series": {"en": "series"},
-    "label_episodes": {"en": "episodes"},
-    "label_favorites": {"en": "favorites"},
-    "label_history_items": {"en": "history items"},
-    "label_recordings": {"en": "recordings"},
-    "label_all": {"en": "All"},
     "label_size": {"en": "Size"},
     "label_sort": {"en": "Sort"},
     "label_default": {"en": "Default"},
@@ -495,7 +443,6 @@ _STRINGS: dict[str, dict[str, str]] = {
 
     # ── Login dialog ──────────────────────────────────────────────────────
 
-    "login_title": {"en": "Connect to an Xtream server"},
     "login_subtitle": {"en": "Sign in with your Xtream Codes credentials."},
     "login_server": {"en": "Server"},
     "login_username": {"en": "Username"},
@@ -517,12 +464,7 @@ _STRINGS: dict[str, dict[str, str]] = {
 
     # ── EPG guide ─────────────────────────────────────────────────────────
 
-    "epg_now": {"en": "Now"},
-    "epg_upcoming": {"en": "Upcoming"},
-    "epg_earlier_today": {"en": "Earlier today"},
-    "epg_no_current_data": {"en": "No current programme data"},
     "epg_no_guide_available": {"en": "No programme guide available for this channel."},
-    "epg_could_not_load": {"en": "Could not load the programme guide."},
 
     # ── Context menu ──────────────────────────────────────────────────────
 
@@ -564,7 +506,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "ctx_rename_folder": {"en": "Rename folder…"},
     "ctx_remove_folder": {"en": "Remove folder “{group}”"},
     "prompt_folder_name": {"en": "Folder name:"},
-    "ctx_new_group": {"en": "New group…"},
     "ctx_remove_from_favorites": {"en": "Remove from favorites"},
     "ctx_rename_channel": {"en": "Rename channel…"},
     "ctx_rename": {"en": "Rename…"},
@@ -577,31 +518,10 @@ _STRINGS: dict[str, dict[str, str]] = {
     "ctx_new_folder": {"en": "New folder…"},
     "ctx_move_to": {"en": "Move to"},
 
-    # ── Category management dialog ────────────────────────────────────────
-
-    "cat_manage_title": {"en": "Manage categories"},
-    "cat_rename": {"en": "Rename…"},
-    "cat_hide": {"en": "Hide"},
-    "cat_unhide": {"en": "Unhide"},
-    "cat_lock": {"en": "Lock"},
-    "cat_unlock": {"en": "Unlock"},
-
     # ── Parental control ──────────────────────────────────────────────────
 
     "parental_enter_pin": {"en": "Enter PIN:"},
-    "parental_wrong_pin": {"en": "Wrong PIN."},
-    "parental_no_pin_set": {"en": "No PIN set."},
-    "parental_set_change_pin": {"en": "Set / change PIN…"},
-    "parental_remove_pin": {"en": "Remove PIN"},
-    "parental_lock_now": {"en": "Lock now"},
     "parental_control": {"en": "Parental control"},
-
-    # ── Confirmation / message dialogs ────────────────────────────────────
-
-    "confirm_clear_history": {"en": "Remove all watch history?"},
-    "confirm_delete_recording": {"en": "Delete {what} from disk?"},
-    "confirm_remove_playlist": {"en": "Remove this playlist? Its favorites and history are kept until you re-add and clear them."},
-    "confirm_restore_channels": {"en": "Undo all channel renames and hides for this section and go back to the provider's original list?"},
 
     # ── Options menu (embedded player) ────────────────────────────────────
 
@@ -622,32 +542,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     # ── Timeshift / catch-up ──────────────────────────────────────────────
 
     "epg_play_this_programme": {"en": "Play this programme (catch-up)"},
-    "ts_play_from_start": {"en": "Play from start (catch-up)"},
     "ts_go_live": {"en": "Go Live"},
-    "ts_watch_from_start": {"en": "Watch '{title}' from the start"},
     "ts_browse_past": {"en": "Browse past programmes (EPG)…"},
-    "ts_go_back_30m": {"en": "Go back 30 minutes"},
-    "ts_go_back_1h": {"en": "Go back 1 hour"},
-    "ts_go_back_2h": {"en": "Go back 2 hours"},
-    "ts_go_back_6h": {"en": "Go back 6 hours"},
-    "ts_go_back_12h": {"en": "Go back 12 hours"},
-    "ts_go_back_1d": {"en": "Go back 1 day"},
-    "ts_go_back_2d": {"en": "Go back 2 days"},
-    "ts_go_back_3d": {"en": "Go back 3 days"},
-    "ts_go_back_5d": {"en": "Go back 5 days"},
-    "ts_go_back_7d": {"en": "Go back 7 days"},
-
-    # ── Metadata tab ──────────────────────────────────────────────────────
-
-    "meta_artwork_source": {"en": "Artwork source"},
-    "meta_playlist_artwork": {"en": "Playlist (provider artwork)"},
-    "meta_tmdb_artwork": {"en": "TMDB (fetch posters by title)"},
-    "meta_tmdb_api_key": {"en": "TMDB API key"},
-
-    # ── About dialog ──────────────────────────────────────────────────────
-
-    "about_description": {"en": "An elegant IPTV client for Xtream Codes with EPG, embedded playback, favorites and history."},
-    "about_playback_via": {"en": "Playback via mpv (embedded/window) or VLC."},
 
     # ── Refresh options ───────────────────────────────────────────────────
 
@@ -662,23 +558,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     # ── Misc / various ────────────────────────────────────────────────────
 
     "misc_movie": {"en": "Movie"},
-    "misc_series_singular": {"en": "Series"},
-    "misc_episode": {"en": "Episode"},
-    "misc_recordings_saved_in": {"en": "Recordings are saved in:"},
-    "misc_choose_folder": {"en": "Choose folder…"},
-    "misc_no_audio_tracks": {"en": "(no audio tracks)"},
-    "misc_error": {"en": "Error: {msg}"},
-    "misc_view_on_imdb": {"en": "View on IMDb"},
-    "misc_loading": {"en": "Loading…"},
-    "misc_connected_to_trakt": {"en": "Connected to Trakt."},
-    "misc_not_connected": {"en": "Not connected."},
-    "misc_connect_to_trakt": {"en": "Connect to Trakt…"},
-    "misc_disconnect": {"en": "Disconnect"},
-    "misc_watchlist_history": {"en": "Watchlist / History…"},
-    "misc_connect_first": {"en": "Connect to Trakt first."},
-    "misc_stop_recording_at": {"en": "Stop a recording when the file reaches"},
     "misc_theme_applies_immediately": {"en": "Theme and accent apply immediately."},
-    "misc_language_restart": {"en": "The menus update now. Restart dopeIPTV to translate every part of the app."},
     "popout_always_on_top": {"en": "Always on top"},
     "popout_autohide_controls": {"en": "Auto-hide controls"},
     "popout_hide_titlebar": {"en": "Hide title bar"},
@@ -717,11 +597,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "lang_pol": {"en": "Polish"},
     "lang_ara": {"en": "Arabic"},
     "lang_tur": {"en": "Turkish"},
-    "misc_no_playlists_export": {"en": "No playlists to export."},
-    "misc_exported_n_playlists": {"en": "Exported {count} playlist(s) to:\n{path}"},
-    "misc_imported_n_playlists": {"en": "Imported {count} playlist(s)."},
-    "misc_recording_stopped": {"en": "Recording stopped: {title} ({reason})"},
-    "misc_for_linux": {"en": "for Linux"},
 
     # ══════════════════════════════════════════════════════════════════════
     # To add a new UI string: add a key below with a line per language, then
@@ -792,9 +667,6 @@ _STRINGS: dict[str, dict[str, str]] = {
               "have already watched is deleted as it goes, so an evening in "
               "front of the TV costs nothing; only the pause itself takes "
               "room, and all of it is gone when the cast ends."},
-    "cast_paused_from": {"en": "Paused - play resumes from {time}"},
-    "cast_subs_unavailable": {
-        "en": "This ffmpeg has no libass - subtitles cannot be sent"},
     "cast_track_note": {
         "en": "Choosing a track converts the stream on this computer."},
 
@@ -802,11 +674,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "playlist_msg_title": {"en": "Playlist"},
     "playlist_name_placeholder": {"en": "e.g. My provider"},
     "playlist_epg_placeholder": {"en": "optional - overrides the provider's xmltv.php"},
-
-    # ── Recording scheduling messages (EPG guide) ─────────────────────────
-    "rec_msg_title": {"en": "Record"},
-    "rec_scheduled_status": {"en": "Scheduled {n} recording(s) - see Recordings → Upcoming"},
-    "rec_skipped_warning": {"en": "{n} programme(s) could not be scheduled: missing channel stream id."},
 
     # ── Content manager dialog ────────────────────────────────────────────
     "cm_title": {"en": "Manage categories"},
@@ -854,7 +721,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "tmdb_n_matches": {"en": "{n} matches"},
     "tmdb_use_this": {"en": "Use this"},
     "tmdb_clear_override": {"en": "Clear override"},
-    "ctx_remove_group": {"en": "Remove group \"{group}\""},
     "ctx_unlock_group": {"en": "Unlock group (remove protection)"},
     "ctx_lock_group": {"en": "Lock group (parental control)"},
     "ctx_rename_category": {"en": "Rename category…"},
@@ -989,12 +855,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "trakt_create_app": {"en": "Create a free Trakt app…"},
     "trakt_client_id_ph": {"en": "Client ID (from the app you created)"},
     "trakt_client_secret_ph": {"en": "Client Secret"},
-    "trakt_connect_btn": {"en": "Connect to Trakt…"},
     "trakt_connect_browser": {"en": "Connect via browser"},
-    "trakt_save_creds": {"en": "Save Client ID & Secret"},
-    "trakt_creds_saved": {"en": "Saved. Now click 'Connect via browser' above to sign in."},
     "trakt_connect_browser_hint": {"en": "The easy way: uses dopeIPTV's built-in Trakt app. Your browser opens Trakt, you click 'Yes', and you're signed in - no codes."},
-    "trakt_creds_hint": {"en": "Advanced: use your own Trakt API app. Paste its Client ID and Secret, Save them, then use 'Connect via browser' above (Trakt always confirms sign-in in the browser)."},
     "trakt_disconnect": {"en": "Disconnect"},
     "trakt_watchlist_btn": {"en": "Watchlist / History…"},
     "mark_needs_tmdb": {"en": "TMDB metadata hasn't resolved for this title yet — try again in a few seconds, or use 'Match on TMDB…' to pick one manually."},
@@ -1030,7 +892,6 @@ _STRINGS: dict[str, dict[str, str]] = {
     "cat_search_items": {"en": "Search this list…"},
     "cat_search_none": {"en": "No matching categories"},
 
-    "sec_timeshift": {"en": "Timeshift"},
     "reminders_menu": {"en": "Reminders…"},
     "reminders_title": {"en": "Reminders"},
     "reminders_empty": {"en": "No reminders set"},
