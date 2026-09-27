@@ -72,6 +72,26 @@ def test_detect_provider_link_plain_m3u():
     assert detect_provider_link(gh) == ("m3u", gh, "", "")
 
 
+def test_parse_xtream_url_timeshift_path():
+    assert parse_xtream_url(
+        "http://host.tv:8080/timeshift/abc/xyz/120/2026-09-27:20-00/1234.ts"
+    ) == ("http://host.tv:8080", "abc", "xyz")
+
+
+def test_a_playlist_path_without_a_stream_id_is_not_credentials():
+    # Issue #17, second report: an M3U served from a path with no .m3u
+    # extension (Dispatcharr: /output/m3u) was read as Xtream user "output",
+    # password "m3u", and pasting it flipped the form to Xtream. A stream url
+    # ends in a numeric stream id; these do not.
+    for url in ("http://192.168.1.111:9191/output/m3u",
+                "http://192.168.1.111:9191/output/m3u?direct=true",
+                "https://example.com/lists/all",
+                "https://example.com/a/b/c",
+                "http://host.tv:8080/live/abc/xyz"):
+        assert parse_xtream_url(url) is None, url
+        assert detect_provider_link(url) is None, url
+
+
 def test_detect_provider_link_rejects_bare_input():
     for bad in ("", "host.tv:8080", "http://host.tv:8080", "just text"):
         assert detect_provider_link(bad) is None

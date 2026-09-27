@@ -779,15 +779,21 @@ def parse_xtream_url(text: str) -> tuple[str, str, str] | None:
         return server, user, pw
 
     # Fallback: path-based stream URLs embed the credentials as the first two
-    # path segments — /live/USER/PASS/ID.ext, /movie/..., /series/..., or the
-    # bare /USER/PASS/ID form. Skip a leading media-type segment when present.
-    # A path ending in .m3u/.m3u8 is a plain playlist, not an Xtream stream.
+    # path segments — /live/USER/PASS/ID.ext, /movie/..., /series/..., the
+    # timeshift form /timeshift/USER/PASS/DURATION/START/ID.ext, or the bare
+    # /USER/PASS/ID. What makes it a STREAM url is the numeric stream id at
+    # the end; without one, any two-segment path read as credentials - an M3U
+    # served at http://host:9191/output/m3u (Dispatcharr and friends) became
+    # Xtream user "output", password "m3u", and the form flipped to Xtream
+    # the moment the link was pasted (issue #17). A path ending in
+    # .m3u/.m3u8 is a plain playlist, not an Xtream stream.
     if u.path.lower().endswith((".m3u", ".m3u8")):
         return None
     parts = [p for p in u.path.split("/") if p]
     if parts and parts[0] in ("live", "movie", "series", "timeshift"):
         parts = parts[1:]
-    if len(parts) >= 2 and parts[0] and parts[1]:
+    if (len(parts) >= 3 and parts[0] and parts[1]
+            and re.fullmatch(r"\d+(\.[A-Za-z0-9]{1,5})?", parts[-1])):
         return server, parts[0], parts[1]
     return None
 
