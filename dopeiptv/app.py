@@ -477,11 +477,12 @@ def main() -> int:
             # failures already surface through the list-load error paths and
             # recover by themselves (cooldown + caches).
             if isinstance(e, RuntimeError) and "username or password" in str(e):
+                from .i18n import tr
+                where = f"{tr('settings_title')} → {tr('tab_playlists')}"
                 QMessageBox.warning(
-                    w, "Connection failed",
+                    w, tr("msg_connection_failed"),
                     f"{pl['name']}: {e}\n\n"
-                    "Check the playlist's credentials under Settings → "
-                    "Playlists.")
+                    + tr("msg_check_playlist_credentials", where=where))
 
         QTimer.singleShot(500, _check_auth)
 

@@ -1563,11 +1563,9 @@ class _SettingsMixin:
 
         def refresh_pin_status():
             if self.parental.has_pin():
-                state = ("unlocked for this session"
-                         if self.parental.session_unlocked
-                         else "locked")
-                pin_status.setText(
-                    f"PIN is set - currently {state}.")
+                pin_status.setText(tr("pin_set_unlocked")
+                                   if self.parental.session_unlocked
+                                   else tr("pin_set_locked"))
             else:
                 pin_status.setText(tr("pin_none_set"))
             remove_pin_btn.setEnabled(self.parental.has_pin())
@@ -1614,7 +1612,7 @@ class _SettingsMixin:
                 pl_list.addItem(tr("pl_mgmt_unavailable"))
                 return
             for p in store.playlists():
-                suffix = ("   (active)"
+                suffix = ("   " + tr("pl_active")
                           if p["id"] == store.active_id else "")
                 item = QListWidgetItem(
                     f"{p['name']}  -  {p['server']}{suffix}")

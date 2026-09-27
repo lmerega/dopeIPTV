@@ -808,6 +808,11 @@ _STRINGS: dict[str, dict[str, str]] = {
     "pin_remove": {"en": "Remove PIN"},
     "pin_lock_now": {"en": "Lock now"},
     "pin_none_set": {"en": "No PIN set."},
+    "msg_connection_failed": {"en": "Connection failed"},
+    "msg_check_playlist_credentials": {"en": "Check the playlist's credentials under {where}."},
+    "pin_set_unlocked": {"en": "PIN is set - currently unlocked for this session."},
+    "pin_set_locked": {"en": "PIN is set - currently locked."},
+    "pl_active": {"en": "(active)"},
     "pl_mgmt_unavailable": {"en": "Playlist management unavailable"},
 
     # ── Message boxes ─────────────────────────────────────────────────────
