@@ -1,70 +1,92 @@
-## dopeIPTV 1.2.11
+## dopeIPTV 1.2.12
 
-Mostly Linux this time: the desktop icon, the links in the About window,
-and a handful of things that went wrong when a list and the player
-disagreed about what you had selected.
+Fixes for the Windows in-app player, M3U links that turned into Xtream
+logins and a crash when closing the "resume" prompt - and the results of
+a full review of the code, which found parental control holes, playlists
+and guides that never refreshed, and a set of smaller faults.
 
-### Linux desktop
+### Windows
 
-- **The app appears in your menu, with its icon.** On Wayland GNOME and
-  KDE take a window's icon and name from the .desktop entry matching it
-  and ignore what the app itself sets — so run from an AppImage, where
-  nothing has ever installed one, the taskbar showed a blank placeholder
-  however good the icon inside the download was. The app now offers, once,
-  to add an entry; say no and nothing is written, and the same switch
-  lives under Settings > Playback. Installed from the `.deb`, the entry is
-  already there and nothing is asked.
-- **The icon is the same size as everyone else's.** It was drawn edge to
-  edge while every icon beside it carries a margin — GNOME asks for about
-  80% of the canvas, which is the same thing Apple asks for and the same
-  fix the macOS Dock icon got in 1.2.10.
-- **An icon that will not appear at all** now has a cause you can read.
-  Where a stale `icon-theme.cache` exists, GTK reads that instead of the
-  directory and an icon added since is invisible — the app drops one older
-  than its own icons, and writes a line to the log saying what it found.
-- **Links in the About window work.** Website, download, the Trakt pages:
-  all of them did nothing from a packaged build. Opening a link starts a
-  browser as a child of this process, and it was inheriting the bundle's
-  library paths and falling over before it drew anything — exactly the
-  fault external mpv had, and the same cure.
+- **In-app video works on PCs without a Vulkan driver.** The player
+  library needs `vulkan-1.dll`, the Vulkan loader. Windows itself does
+  not include it; graphics drivers install it. On a PC without one —
+  an older graphics driver, a virtual machine, the basic display
+  adapter — Windows refused to load the player, and every channel opened
+  in an external player instead. The app now ships its own copy, and the
+  build fails if the player ever needs a file that neither Windows nor
+  the download provides. Thanks to @bcorsa2017 for the report and for
+  confirming the cause (#19).
+- **When in-app video is unavailable, Settings says why.** Under
+  Settings > Playback the reason now names what is missing: the player
+  file itself (often removed by an antivirus), or a file it depends on.
+- **The README in the zip explains how to capture a log.**
+- **No more console windows.** Every ffmpeg the app started - for a
+  recording, a cast or a thumbnail - opened a console window of its own,
+  and closing the one beside a recording killed the recording.
+- **Local files get thumbnails**, from the ffmpeg in the download (it was
+  only ever looked for on PATH, where there is none).
 
-### Watching a series
+### Parental control
 
-- **Turning grid view on and off inside a series keeps the episodes.**
-  It dropped back to the series list instead, and double-clicking there
-  then tried to play the series itself: an error, and whatever was playing
-  stopped. Three related faults behind it, all the same shape — a list row
-  and the player disagreeing about what had been selected — and Favorites,
-  Watchlist and Watched had their own versions of it.
-- **A hidden channel no longer hides a film.** Provider ids are only
-  unique within a type, so hiding live channel 123 could hide movie 123 as
-  well.
+- **A locked category stays locked everywhere.** Its titles showed up on
+  Home ("New movies", "New series", "New channels"), in the guide, in
+  the guide search and in an actor's "other titles" - to anyone. Locked
+  favorite folders showed on Home too.
+- **Unlocking asks for the PIN.** Lifting a category's lock from its
+  menu or from Manage categories, unlocking a favorite folder or removing
+  a locked one all did so without it.
+- **Each playlist keeps its own rules.** Switching playlists kept the
+  previous one's hidden, renamed and locked categories.
 
-### Elsewhere
+### Playlists
 
-- **The right-hand panel has one scrollbar, not two.** The info box was
-  its own scroll area inside the panel's, and the wheel — a trackpad
-  especially — went to whichever of them the pointer happened to be over.
-- **The "Next episode" card sits where the picture ends**, rather than a
-  control bar's height above it when there is no control bar there.
-- **Your account stays out of the log.** An Xtream stream URL carries the
-  whole account in it, and these logs are meant to be shared in bug
-  reports. Credentials are now masked wherever they appear — the URL
-  shapes we know, and the account's own values everywhere else.
-- **The Chromecast bridge only answers for its own files.** It listens on
-  the LAN so the television can reach it, so everything else on the
-  network can ask it too; it now names what it will serve instead of
-  guessing at what to refuse.
-- **macOS can try the other fullscreen path.** Start with
-  `DOPEIPTV_MAC_RASTER=1` to use the presentation path that cured this on
-  Linux and Windows. Opt-in, so both can be compared from one build.
+- **An M3U link stays an M3U link.** A playlist served from an address
+  such as `http://host:9191/output/m3u` (Dispatcharr and similar) was
+  read as an Xtream login — username `output`, password `m3u` — and
+  pasting it switched the playlist type to Xtream. Only a real Xtream
+  stream address is read that way now, and the type you picked stays.
+  Thanks to @brokenglasszero for reopening #17.
+- **M3U playlists refresh.** Refresh and the automatic refresh never
+  downloaded an M3U list again, and one that failed to load at startup
+  stayed empty until the app restarted. A group name with a comma in it
+  ("News, Sports") no longer garbles the channel.
+- **Guides written as `20260927200000+0200` load.** A time zone without
+  the space before it made every programme unreadable, and such a guide
+  came out empty.
+- **Refreshing while offline keeps the guide** you already had.
 
-### macOS: Apple Silicon only
+### Everywhere
 
-**1.2.10 was the last release with an Intel `.dmg`.** Homebrew moved macOS
-x86_64 to Tier 3 in September 2026 and stopped building the packages the
-Intel build was assembled from; Apple has said macOS Tahoe 26 is the last
-macOS for Intel. Apple Silicon is unaffected.
+- **Closing the "resume where you left off?" prompt no longer crashes the
+  app.** Clicking a title under Continue watching on Home and then
+  closing that prompt with the window's close button (the red button on
+  macOS) crashed the whole app. Home cards now react when the mouse
+  button is released, like any other button.
+- **The Chromecast bridge was hardened further.** It finds the requested
+  file by listing its own folder instead of building a path from the
+  request.
+- **Trakt stays connected.** The sign-in expires, and the app never
+  renewed it: scrobbles and watched sync stopped quietly until you signed
+  in again. It renews itself now. Closing the sign-in window also frees
+  it for another try straight away.
+- **Recordings work with more providers.** ffmpeg now identifies itself
+  the way the player does, which panels that refused it accept, and a
+  dropped connection no longer ends a live recording.
+- **Recording from the guide uses the stream you are watching** when it
+  is that channel, instead of a second connection that a
+  single-connection account cuts off.
+- **Renaming or moving a recording never replaces another one** that had
+  the same name.
+- **Posters recover from a network hiccup.** A lookup that timed out was
+  remembered as "no poster" for good; an image server answering with a
+  web page was fetched again on every repaint.
+- **Local files**: leaving the section during a library scan no longer
+  leaves the library half-scanned for the rest of the session, and "Add
+  to multiview" offers every cell of a 3x3 grid.
+- **The detail panel shows the right poster** when you arrow quickly
+  through a list.
+- **Crashes reach the log file** you attach to a bug report, with the
+  account masked like every other line.
 
 Full details in the [changelog](https://github.com/slimture/dopeIPTV/blob/main/CHANGELOG.md).
 

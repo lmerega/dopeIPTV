@@ -5,6 +5,92 @@ All notable changes to dopeIPTV, newest first. This project loosely follows
 [Semantic Versioning](https://semver.org/). Each release is also published, with
 downloads, on the [GitHub releases page](https://github.com/slimture/dopeIPTV/releases).
 
+## [1.2.12]
+
+The Windows player, M3U links read as Xtream logins and a crash on
+closing the resume prompt - plus everything a full review of the code
+turned up: parental-control holes, refreshes that never refreshed, and a
+list of smaller faults and dead code.
+
+### Fixed
+
+- **Windows: in-app video without a Vulkan driver (#19).** libmpv imports
+  `vulkan-1.dll`, which only graphics drivers install. The release build
+  now compiles the Khronos loader into the bundle, a self-check proves it
+  is loaded from there, and `tools/win_dll_audit.py` fails the build on
+  any DLL neither Windows nor the bundle provides. Settings > Playback
+  names the missing file when in-app video is unavailable.
+- **Windows: no console windows.** ffmpeg and ffprobe started by
+  recording, the cast bridge and the thumbnailer each got a console of
+  their own (for a recording, open the whole time - closing it killed
+  the recording). They start with `CREATE_NO_WINDOW`.
+- **M3U links stay M3U (#17).** The path fallback in `parse_xtream_url`
+  required nothing of the last segment, so `/output/m3u` read as user
+  `output`, password `m3u`. It now needs a numeric stream id.
+- **Closing the resume prompt no longer crashes (macOS).** Home cards
+  emitted `clicked` from `mousePressEvent`; the prompt's event loop and
+  leaving Home ran under Qt's implicit grab, and a card deleted meanwhile
+  crashed `QApplication::notify`. Cards act on release, deferred.
+- **Parental control.** Home's shelves, the guide's whole-lineup
+  fallback, the guide search and the cast filmography read the whole
+  catalogue and showed locked and hidden categories; they go through one
+  filter now, and Home re-filters its cached copies at paint time. Locked
+  favorite folders are left off Home. Unlocking a category (menu or
+  Manage categories), unlocking a favorite folder and removing a locked
+  one ask for the PIN.
+- **Switching playlists loads that playlist's rules.** The category and
+  channel override stores were built once, so the previous playlist's
+  hide/rename/lock rules applied and edits were saved under its key. The
+  whole-catalogue caches are dropped on a switch and a refresh too.
+- **M3U refresh.** `M3UClient` inherited a no-op `clear_list_cache`, so
+  Refresh never re-downloaded; a failed first load was never retried.
+  Refresh now re-downloads on the next list call (keeping the channels
+  until the new copy parses), failures retry after a minute, and URL
+  lookups never wait on a download. `#EXTINF` parsing keeps a comma
+  inside a quoted attribute.
+- **XMLTV times with `+0200` and no space** parsed as nothing, emptying
+  such guides; `Z`/`GMT`/`UTC` read as UTC. A forced guide refresh that
+  cannot download falls back to the copy on disk of any age.
+- **Xtream: `get_short_epg` answering `[]`** no longer raises.
+- **Trakt tokens are refreshed.** The refresh token and expiry were
+  stored and never read. Calls now renew the token within ten minutes of
+  expiry, under a lock, with a five-minute back-off after a refusal.
+  Closing a sign-in dialog any way stops the loopback listener (which
+  held its port for three minutes) and the device-code polling.
+- **Recordings:** ffmpeg sends the player's User-Agent and reconnects on
+  live URLs (not archive windows); the mpv fallback sends the User-Agent
+  too. Renaming or moving a recording onto an existing name no longer
+  overwrites that file. Recording an on-air programme from the guide
+  takes the detail panel's path (in-player capture of the channel being
+  watched) instead of a second connection.
+- **Artwork:** a TMDB error was cached - persistently - as "no match";
+  errors are session-only now. A failed filmography or person lookup left
+  the cast panel waiting forever. The image loader wrote a non-image 200
+  to its disk cache and refetched it on every paint; such a URL is marked
+  dead. The shared dead-URL map is trimmed in place instead of rebound.
+  The detail panel paints a poster only for the row still selected.
+- **ID3 covers after a UTF-16 description** were cut at the wrong byte.
+- **Local files:** leaving mid-scan left the scan marked active, so it
+  never ran again that session; thumbnails use the bundled ffmpeg; "Add
+  to multiview" lists every cell of the grid.
+- **Multiview** reads a channel's archive flags defensively.
+- **Stores:** `HistoryStore.remove` compares keys as strings like `add`;
+  `FavoriteStore.remove` no longer creates a missing folder;
+  `WatchedStore.clear` forgets whole-show marks; malformed watched and
+  watch-later caches no longer raise at startup.
+- **Crash tracebacks go through the logger**, so they reach
+  `DOPEIPTV_LOG_FILE` and are masked.
+- **Untranslated strings**: the wrong-credentials dialog, the PIN status
+  line and the active-playlist mark.
+
+### Removed
+
+- Dead code: `timeshift_url`, the player's `_is_seekable`,
+  `AUDIO_URL_EXTS` and archive-segment flag, the cast bridge's
+  `_filter_escape`, `_remove_history`, `is_item_watched`, several
+  write-only attributes, and 121 translation keys nothing used (from the
+  English source and all 26 locales).
+
 ## [1.2.11]
 
 Mostly Linux: the desktop icon, the links in the About window, and a set
