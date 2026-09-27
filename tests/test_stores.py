@@ -243,3 +243,48 @@ def test_a_trakt_sync_survives_a_restart(tmp_path):
     assert fresh.trakt_title(11, "movie") == "A Film"
     assert fresh.trakt_title(77, "series") == "A Show"
     assert fresh.last_sync_at == store.last_sync_at
+
+
+def test_history_remove_matches_int_and_str_keys():
+    # add() compares keys as strings; remove() compared them raw, so a row
+    # stored with key 42 survived remove("42").
+    h = HistoryStore(_mock_settings())
+    h.add("http://x/1", "One", None, 42, "movie")
+    h.remove("42", "movie")
+    assert h.items() == []
+
+
+def test_favorite_remove_from_a_missing_folder_creates_nothing():
+    fav = FavoriteStore(_mock_settings())
+    fav.add("all", {"stream_id": 1})
+    fav.remove(1, "No such folder")
+    assert "No such folder" not in fav.groups
+
+
+def test_watched_clear_forgets_whole_show_marks():
+    w = WatchedStore(_mock_settings())
+    w.local_shows.add(5)
+    w.synced_shows.add(5)
+    w.clear()
+    assert not w.local_shows and not w.synced_shows
+
+
+def test_a_malformed_watched_cache_does_not_break_startup():
+    import json
+    for data in (
+            [1, 2],
+            {"trakt_episodes": {"7": [[1, 2], [3], "x", [1, 2, 3]]},
+             "local_movies": 5, "local_items": {"a": 1},
+             "trakt_movie_titles": {"abc": "x", "9": "Nine"},
+             "last_sync_at": "yesterday"},
+            {"trakt_episodes": [1], "trakt_show_titles": [1],
+             "synced_shows": None}):
+        s = _mock_settings()
+        s.setValue("trakt_watched_cache", json.dumps(data))
+        s.setValue("trakt_watchlist_cache", json.dumps(data))
+        w = WatchedStore(s)
+        WatchlistStore(s)
+        if isinstance(data, dict) and "local_movies" in data:
+            assert w.episodes_for(7) == {(1, 2)}
+            assert w.trakt_movie_titles == {9: "Nine"}
+            assert w.last_sync_at == 0

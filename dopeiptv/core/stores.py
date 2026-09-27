@@ -21,6 +21,21 @@ from PyQt6.QtCore import QSettings
 FAV_DEFAULT_GROUP = "all"
 
 
+def _int_set(value: Any) -> set[int]:
+    """The ints in a JSON list read back from settings; anything else - a
+    hand-edited value, a null, a lone number - reads as empty rather than
+    raising while the window is being built."""
+    if not isinstance(value, list):
+        return set()
+    return {x for x in value if isinstance(x, int)}
+
+
+def _dict_list(value: Any) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    return [x for x in value if isinstance(x, dict)]
+
+
 class FavoriteStore:
     """Favorites in user-defined groups, persisted via QSettings.
 
@@ -63,7 +78,9 @@ class FavoriteStore:
 
     def remove(self, ident: Any, group: str | None = None) -> None:
         for g in ([group] if group else list(self.groups)):
-            self.groups[g] = [x for x in self.groups.get(g, [])
+            if g not in self.groups:
+                continue        # never conjure an empty folder into being
+            self.groups[g] = [x for x in self.groups[g]
                               if x.get(self.id_key) != ident]
         self._save()
 
@@ -228,8 +245,10 @@ class HistoryStore:
         self._save()
 
     def remove(self, key: str, kind: str) -> None:
+        # str() both sides, as add() does: an int key missed a str one.
         self.entries = [e for e in self.entries
-                        if not (e.get("_key") == key and e.get("_kind") == kind)]
+                        if not (str(e.get("_key")) == str(key)
+                                and e.get("_kind") == kind)]
         self._save()
 
     def clear(self) -> None:
@@ -505,14 +524,31 @@ class WatchedStore:
     @staticmethod
     def _load_eps(raw) -> dict[int, set[tuple[int, int]]]:
         eps: dict[int, set[tuple[int, int]]] = {}
-        for sid, pairs in (raw or {}).items():
+        if not isinstance(raw, dict):
+            return eps
+        for sid, pairs in raw.items():
             try:
                 key = int(sid)
             except (ValueError, TypeError):
                 continue
-            eps[key] = {(int(s), int(e)) for s, e in pairs
-                        if isinstance(s, int) and isinstance(e, int)}
+            if not isinstance(pairs, list):
+                continue
+            eps[key] = {(p[0], p[1]) for p in pairs
+                        if isinstance(p, (list, tuple)) and len(p) == 2
+                        and isinstance(p[0], int) and isinstance(p[1], int)}
         return eps
+
+    @staticmethod
+    def _load_titles(raw) -> dict[int, str]:
+        out: dict[int, str] = {}
+        if not isinstance(raw, dict):
+            return out
+        for k, v in raw.items():
+            try:
+                out[int(k)] = str(v)
+            except (ValueError, TypeError):
+                continue
+        return out
 
     def _load(self) -> None:
         raw = self.settings.value("trakt_watched_cache", "") or ""
@@ -522,40 +558,34 @@ class WatchedStore:
             data = json.loads(raw)
         except (ValueError, TypeError):
             return
+        # One malformed value in a hand-edited or half-written cache used to
+        # raise here, and the store is built while the window starts.
+        if not isinstance(data, dict):
+            return
         # Back-compat: old versions stored a flat "movies"/"episodes"
         # (Trakt-only). Read those into the Trakt layer if the new
         # layered keys aren't present.
-        self.trakt_movies = {
-            int(x) for x in
-            data.get("trakt_movies", data.get("movies", []))
-            if isinstance(x, int)}
-        self.local_movies = {int(x) for x in data.get("local_movies", [])
-                             if isinstance(x, int)}
+        self.trakt_movies = _int_set(
+            data.get("trakt_movies", data.get("movies")))
+        self.local_movies = _int_set(data.get("local_movies"))
         self.trakt_episodes = self._load_eps(
             data.get("trakt_episodes") or data.get("episodes"))
         self.local_episodes = self._load_eps(data.get("local_episodes"))
-        self.local_movie_streams = {
-            int(x) for x in data.get("local_movie_streams", [])
-            if isinstance(x, int)}
-        self.local_series_streams = {
-            int(x) for x in data.get("local_series_streams", [])
-            if isinstance(x, int)}
-        self.local_episode_streams = {
-            int(x) for x in data.get("local_episode_streams", [])
-            if isinstance(x, int)}
-        self.local_shows = {int(x) for x in data.get("local_shows", [])
-                            if isinstance(x, int)}
-        self.synced_shows = {int(x) for x in data.get("synced_shows", [])
-                             if isinstance(x, int)}
-        self.local_items = [x for x in (data.get("local_items") or [])
-                            if isinstance(x, dict)]
-        self.trakt_movie_titles = {
-            int(k): str(v) for k, v in
-            (data.get("trakt_movie_titles") or {}).items()}
-        self.trakt_show_titles = {
-            int(k): str(v) for k, v in
-            (data.get("trakt_show_titles") or {}).items()}
-        self.last_sync_at = int(data.get("last_sync_at") or 0)
+        self.local_movie_streams = _int_set(data.get("local_movie_streams"))
+        self.local_series_streams = _int_set(data.get("local_series_streams"))
+        self.local_episode_streams = _int_set(
+            data.get("local_episode_streams"))
+        self.local_shows = _int_set(data.get("local_shows"))
+        self.synced_shows = _int_set(data.get("synced_shows"))
+        self.local_items = _dict_list(data.get("local_items"))
+        self.trakt_movie_titles = self._load_titles(
+            data.get("trakt_movie_titles"))
+        self.trakt_show_titles = self._load_titles(
+            data.get("trakt_show_titles"))
+        try:
+            self.last_sync_at = int(data.get("last_sync_at") or 0)
+        except (ValueError, TypeError):
+            self.last_sync_at = 0
 
     def _save(self) -> None:
         def dump_eps(eps):
@@ -819,6 +849,8 @@ class WatchedStore:
         self.local_movie_streams = set()
         self.local_series_streams = set()
         self.local_episode_streams = set()
+        self.local_shows = set()
+        self.synced_shows = set()
         self.local_items = []
         self.trakt_movie_titles = {}
         self.trakt_show_titles = {}
@@ -854,15 +886,16 @@ class WatchlistStore:
             data = json.loads(raw)
         except (ValueError, TypeError):
             return
-        self.movies = [x for x in (data.get("movies") or [])
-                       if isinstance(x, dict)]
-        self.shows = [x for x in (data.get("shows") or [])
-                      if isinstance(x, dict)]
-        self.trakt_movies = {int(x) for x in data.get("trakt_movies", [])
-                             if isinstance(x, int)}
-        self.trakt_shows = {int(x) for x in data.get("trakt_shows", [])
-                            if isinstance(x, int)}
-        self.last_sync_at = int(data.get("last_sync_at") or 0)
+        if not isinstance(data, dict):
+            return
+        self.movies = _dict_list(data.get("movies"))
+        self.shows = _dict_list(data.get("shows"))
+        self.trakt_movies = _int_set(data.get("trakt_movies"))
+        self.trakt_shows = _int_set(data.get("trakt_shows"))
+        try:
+            self.last_sync_at = int(data.get("last_sync_at") or 0)
+        except (ValueError, TypeError):
+            self.last_sync_at = 0
 
     def _save(self) -> None:
         payload = {
