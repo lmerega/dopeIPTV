@@ -306,12 +306,19 @@ class XtreamClient:
 
     def short_epg(self, stream_id: int | str, limit: int = 8) -> list[dict]:
         data = self._api(action="get_short_epg", stream_id=stream_id, limit=limit)
-        return (data or {}).get("epg_listings", [])
+        return self._listings(data)
+
+    @staticmethod
+    def _listings(data) -> list[dict]:
+        # Some panels answer an unknown stream with a bare [] instead of an
+        # object; .get on it raised and lost the whole info panel.
+        rows = data.get("epg_listings") if isinstance(data, dict) else None
+        return rows if isinstance(rows, list) else []
 
     def epg_table(self, stream_id: int | str) -> list[dict]:
         """Full EPG table - fallback when get_short_epg returns nothing."""
         data = self._api(action="get_simple_data_table", stream_id=stream_id)
-        return (data or {}).get("epg_listings", [])
+        return self._listings(data)
 
     def xmltv(self) -> bytes:
         """The provider's full XMLTV guide."""
@@ -345,10 +352,6 @@ class XtreamClient:
         ext = ext or "mp4"
         return f"{self.server}/series/{self.username}/{self.password}/{episode_id}.{ext}"
 
-    def timeshift_url(self, stream_id: int | str, start_dt: datetime,
-                      duration_min: int) -> str:
-        return self.timeshift_urls(stream_id, start_dt, duration_min)[0]
-
     def timeshift_urls(self, stream_id: int | str, start_dt: datetime,
                        duration_min: int) -> list[str]:
         """Candidate catch-up URLs in preference order. Panels differ in how
@@ -358,14 +361,13 @@ class XtreamClient:
         having to know which scheme a given provider uses."""
         dur = int(duration_min)
         start = int(start_dt.timestamp())
-        now = int(time.time())
         # The /timeshift/ path takes a formatted stamp; panels disagree on
         # whether it's local or UTC, so try both (a wrong-timezone stamp points
         # outside the archive and comes back as "unrecognized file format").
         stamp = start_dt.strftime("%Y-%m-%d:%H-%M")
-        stamp_utc = datetime.utcfromtimestamp(start).strftime("%Y-%m-%d:%H-%M")
+        stamp_utc = datetime.fromtimestamp(start, timezone.utc).strftime(
+            "%Y-%m-%d:%H-%M")
         base = f"{self.server}/timeshift/{self.username}/{self.password}"
-        live = f"{self.server}/{self.username}/{self.password}/{stream_id}"
 
         def php(s):
             return (f"{self.server}/streaming/timeshift.php?"
@@ -376,7 +378,6 @@ class XtreamClient:
         # were dropped: many panels ignore those params and just serve live,
         # which is worse than a clean "not available" - and the background probe
         # can't tell that apart, so we don't offer them for Xtream.
-        _ = (start, now, live)  # (kept for clarity re: what we deliberately omit)
         out = [f"{base}/{dur}/{stamp}/{stream_id}.ts",
                f"{base}/{dur}/{stamp}/{stream_id}.m3u8"]
         if stamp_utc != stamp:
@@ -413,8 +414,8 @@ class OfflineClient:
         return {}
 
     def clear_list_cache(self) -> None:
-        # Interface parity with XtreamClient's short list cache; these
-        # clients serve from local data, so there is nothing to drop.
+        # Interface parity with XtreamClient's short list cache; this client
+        # serves nothing, so there is nothing to drop.
         return None
 
     def live_categories(self) -> list[dict]:
@@ -459,10 +460,6 @@ class OfflineClient:
     def episode_url(self, episode_id: int | str, ext: str | None = None) -> str:
         return ""
 
-    def timeshift_url(self, stream_id: int | str, start_dt: datetime,
-                      duration_min: int) -> str:
-        return ""
-
     def timeshift_urls(self, stream_id: int | str, start_dt: datetime,
                        duration_min: int) -> list[str]:
         return []
@@ -475,7 +472,13 @@ class M3UClient(OfflineClient):
     can still come from the playlist's separate EPG URL). Channels are grouped
     by their ``group-title`` into categories."""
 
-    _EXTINF = re.compile(r'#EXTINF:-?\d*\s*(?P<attrs>[^,]*),(?P<name>.*)')
+    # A quoted attribute may hold a comma (group-title="News, Sports"); the
+    # loose form still reads a line whose quotes do not balance.
+    _EXTINF = re.compile(
+        r'#EXTINF:\s*-?[\d.]*(?P<attrs>(?:[^,"]|"[^"]*")*),(?P<name>.*)')
+    _EXTINF_LOOSE = re.compile(r'#EXTINF:-?\d*\s*(?P<attrs>[^,]*),(?P<name>.*)')
+    # A failed download is tried again after this long, not on every call.
+    RETRY_SECS = 60.0
     _ATTR = re.compile(r'([\w-]+)="([^"]*)"')
 
     def __init__(self, url: str) -> None:
@@ -484,6 +487,9 @@ class M3UClient(OfflineClient):
         self._channels: list[dict] = []
         self._by_stream_id: dict[int, dict] = {}
         self._loaded = False
+        self._stale = False
+        self._failed_at = 0.0
+        self._load_lock = threading.Lock()
         # EPG URL advertised by the playlist's #EXTM3U header
         # (url-tvg / x-tvg-url), auto-detected while parsing.
         self.epg_url = ""
@@ -510,7 +516,8 @@ class M3UClient(OfflineClient):
             if not line:
                 continue
             if line.startswith("#EXTINF"):
-                m = self._EXTINF.match(line)
+                m = (self._EXTINF.match(line)
+                     or self._EXTINF_LOOSE.match(line))
                 if not m:
                     pending = None
                     continue
@@ -569,18 +576,42 @@ class M3UClient(OfflineClient):
     def authenticate(self) -> dict:
         # Fetching + parsing the list is this provider's "auth": it proves the
         # URL is reachable and yields at least one channel.
+        old = (self._channels, self._by_stream_id, self.epg_url)
         self._parse(self._fetch())
-        self._loaded = True
         if not self._channels:
+            # A refresh that comes back empty keeps the lineup it had.
+            self._channels, self._by_stream_id, self.epg_url = old
             raise RuntimeError("No channels found in the M3U playlist.")
+        self._loaded = True
+        self._stale = False
         return {"user_info": {"auth": 1}}
 
-    def _ensure(self) -> None:
-        if not self._loaded:
+    def clear_list_cache(self) -> None:
+        # Refresh: download the list again on the next call. The current
+        # channels stay served until a new copy has parsed.
+        self._stale = True
+        self._failed_at = 0.0
+
+    def _ensure(self, refresh: bool = True) -> None:
+        """Load the list if there is none; with *refresh* also re-download it
+        after clear_list_cache(). URL lookups pass refresh=False: they run on
+        the UI thread when something plays, and must never wait on a
+        download the category reload is already doing."""
+        if self._loaded and (not self._stale or not refresh):
+            return
+        with self._load_lock:
+            if self._loaded and (not self._stale or not refresh):
+                return
+            if (self._failed_at
+                    and time.monotonic() - self._failed_at < self.RETRY_SECS):
+                return
             try:
                 self.authenticate()
-            except Exception:
-                self._loaded = True            # don't retry-storm on failure
+                self._failed_at = 0.0
+            except Exception as e:
+                self._failed_at = time.monotonic()
+                log.warning("m3u: loading the playlist failed - %s: %s",
+                            type(e).__name__, e)
 
     # -- interface ------------------------------------------------------------
 
@@ -598,7 +629,7 @@ class M3UClient(OfflineClient):
                 if category_id is None or c["category_id"] == category_id]
 
     def live_url(self, stream_id: int | str, fmt: str = "ts") -> str:
-        self._ensure()
+        self._ensure(refresh=False)
         return (self._channel(stream_id) or {}).get("_url", "")
 
     def _channel(self, stream_id: int | str) -> dict | None:
@@ -615,7 +646,7 @@ class M3UClient(OfflineClient):
         explicit template, ``append``, ``shift`` (utc/lutc) and ``flussonic`` -
         and always adds the utc/lutc and flussonic forms as fallbacks so a
         provider that doesn't spell out a source still gets a fair try."""
-        self._ensure()
+        self._ensure(refresh=False)
         ch = self._channel(stream_id)
         if ch is None:
             return []

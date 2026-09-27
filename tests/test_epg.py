@@ -245,3 +245,53 @@ def test_ensure_xmltv_loaded_ends_the_progress_indicator(monkeypatch):
     w.xmltv._loaded = True
     w._ensure_xmltv_loaded()
     assert w.finished == 0
+
+
+def test_parse_xmltv_time_offset_without_a_space():
+    # Common in real guides; the strict "%Y%m%d%H%M%S %z" read it as None and
+    # a guide written this way came out empty.
+    for s in ("20260927200000+0200", "20260927200000 +0200",
+              "20260927200000  +02:00"):
+        dt = parse_xmltv_time(s)
+        assert dt is not None, s
+        assert dt.astimezone(timezone.utc) == datetime(
+            2026, 9, 27, 18, 0, tzinfo=timezone.utc), s
+    for s in ("20260927180000Z", "20260927180000 GMT", "20260927180000 UTC"):
+        assert parse_xmltv_time(s).astimezone(timezone.utc) == datetime(
+            2026, 9, 27, 18, 0, tzinfo=timezone.utc), s
+    assert parse_xmltv_time("20260927200000 junk") is None
+
+
+_TINY_GUIDE = (b'<tv><channel id="c1"><display-name>One</display-name>'
+               b'</channel><programme start="20260927200000 +0000" '
+               b'stop="20260927210000 +0000" channel="c1"><title>Show</title>'
+               b'</programme></tv>')
+
+
+def test_a_forced_refresh_that_fails_keeps_the_guide_on_disk(tmp_path):
+    # Refresh while offline: force=True skipped the cache entirely, the
+    # download failed, and the guide was gone for the rest of the session.
+    import gzip
+    import os
+    import time
+
+    cache = tmp_path / "epg_x.xml"
+    cache.write_bytes(gzip.compress(_TINY_GUIDE))
+    old = time.time() - 30 * 86400                     # far past any TTL
+    os.utime(cache, (old, old))
+    g = XmltvGuide(client=None, cache_path=str(cache))
+
+    def offline():
+        raise OSError("offline")
+    g._download = offline
+    assert g.ensure_loaded(force=True) is True
+    assert g._entries_for({"epg_channel_id": "c1"})
+
+
+def test_a_forced_refresh_with_no_cache_and_no_network_fails(tmp_path):
+    g = XmltvGuide(client=None, cache_path=str(tmp_path / "none.xml"))
+
+    def offline():
+        raise OSError("offline")
+    g._download = offline
+    assert g.ensure_loaded(force=True) is False

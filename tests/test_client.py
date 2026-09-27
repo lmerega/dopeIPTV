@@ -179,3 +179,38 @@ def test_concurrent_disk_cache_saves_do_not_race(tmp_path):
         assert json.load(fh)                       # valid, complete JSON
     crumbs = list(path.parent.glob("*.part"))
     assert crumbs == [], crumbs
+
+
+def test_epg_listings_survive_a_list_answer():
+    from dopeiptv.providers.client import XtreamClient
+
+    c = XtreamClient("http://h.tv", "u", "p")
+    for answer, want in (([], []), (None, []), ({}, []),
+                         ({"epg_listings": None}, []),
+                         ({"epg_listings": [{"title": "x"}]}, [{"title": "x"}])):
+        c._api = lambda _a=answer, **_k: _a
+        assert c.short_epg(1) == want
+        assert c.epg_table(1) == want
+
+
+def test_timeshift_urls_carry_a_local_and_a_utc_stamp():
+    import os
+    import time as _time
+    from datetime import datetime
+
+    from dopeiptv.providers.client import XtreamClient
+
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Stockholm"
+    _time.tzset()
+    try:
+        c = XtreamClient("http://h.tv", "u", "p")
+        urls = c.timeshift_urls(7, datetime(2026, 9, 27, 20, 0), 60)
+    finally:
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        _time.tzset()
+    assert urls[0] == "http://h.tv/timeshift/u/p/60/2026-09-27:20-00/7.ts"
+    assert "http://h.tv/timeshift/u/p/60/2026-09-27:18-00/7.ts" in urls

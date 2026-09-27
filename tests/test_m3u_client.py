@@ -114,3 +114,79 @@ def test_make_client_factory():
     assert isinstance(
         make_client({"server": "http://x", "username": "u", "password": "p"}),
         XtreamClient)
+
+
+def test_a_comma_inside_a_quoted_attribute_stays_in_the_attribute():
+    c = M3UClient("http://x")
+    c._parse('#EXTM3U\n'
+             '#EXTINF:-1 tvg-id="a" group-title="News, Sports",Channel One\n'
+             'http://stream/1.ts\n'
+             '#EXTINF:0.000 tvg-name="Two",Channel Two\n'
+             'http://stream/2.ts\n'
+             '#EXTINF:-1 tvg-name="unbalanced,Channel Three\n'
+             'http://stream/3.ts\n')
+    one, two, three = c._channels
+    assert (one["name"], one["category_name"]) == ("Channel One",
+                                                   "News, Sports")
+    assert two["name"] == "Channel Two"
+    assert three["_url"] == "http://stream/3.ts"      # loose form still reads
+
+
+def test_refresh_downloads_the_playlist_again():
+    # The Refresh button and the auto-refresh timer call clear_list_cache();
+    # the M3U client inherited a no-op, so its lineup never changed after
+    # the first download.
+    c = M3UClient("http://x")
+    c._fetch = lambda: SAMPLE
+    c.authenticate()
+    assert len(c.live_streams(None)) == 4
+    c._fetch = lambda: SAMPLE + "#EXTINF:-1,Fifth\nhttp://stream/5.ts\n"
+    assert len(c.live_streams(None)) == 4             # no refresh asked yet
+    c.clear_list_cache()
+    assert len(c.live_streams(None)) == 5
+
+
+def test_a_failed_refresh_keeps_the_channels_it_had():
+    c = M3UClient("http://x")
+    c._fetch = lambda: SAMPLE
+    c.authenticate()
+
+    def down():
+        raise OSError("offline")
+    c._fetch = down
+    c.clear_list_cache()
+    assert len(c.live_streams(None)) == 4
+    c._fetch = lambda: "#EXTM3U\n"                    # empty answer
+    c.clear_list_cache()
+    assert len(c.live_streams(None)) == 4
+    assert c.live_url(1) == "http://stream/bbc1.m3u8"
+
+
+def test_a_failed_first_load_is_tried_again_later():
+    # A failed first download used to mark the client loaded for good: the
+    # list stayed empty until the app restarted.
+    c = M3UClient("http://x")
+    calls = {"n": 0}
+
+    def down():
+        calls["n"] += 1
+        raise OSError("offline")
+    c._fetch = down
+    assert c.live_streams(None) == []
+    assert c.live_categories() == []
+    assert calls["n"] == 1                            # no retry storm
+    c._failed_at -= M3UClient.RETRY_SECS + 1
+    c._fetch = lambda: SAMPLE
+    assert len(c.live_streams(None)) == 4
+
+
+def test_a_url_lookup_never_waits_for_a_refresh():
+    c = M3UClient("http://x")
+    c._fetch = lambda: SAMPLE
+    c.authenticate()
+
+    def must_not_run():
+        raise AssertionError("live_url downloaded the playlist")
+    c._fetch = must_not_run
+    c.clear_list_cache()
+    assert c.live_url(2) == "http://stream/cnn.ts"

@@ -33,13 +33,21 @@ def normalize_name(s: str | None) -> str:
 
 
 def parse_xmltv_time(s: str | None) -> datetime | None:
-    """Parse an XMLTV timestamp: YYYYMMDDHHMMSS [+-ZZZZ]."""
+    """Parse an XMLTV timestamp: YYYYMMDDHHMMSS [+-ZZZZ].
+
+    The offset often comes without the space ("20260927200000+0200"); the
+    strict format read that as no time at all, and a guide written that way
+    came out empty."""
     s = (s or "").strip()
+    rest = s[14:].strip()
     try:
-        if len(s) > 14:
-            return datetime.strptime(s, "%Y%m%d%H%M%S %z").astimezone()
-        return datetime.strptime(s[:14], "%Y%m%d%H%M%S").astimezone()
-    except ValueError:
+        dt = datetime.strptime(s[:14], "%Y%m%d%H%M%S")
+        if rest.upper() in ("Z", "GMT", "UTC"):
+            rest = "+0000"
+        if rest:
+            dt = dt.replace(tzinfo=datetime.strptime(rest, "%z").tzinfo)
+        return dt.astimezone()
+    except (ValueError, OverflowError, OSError):
         return None
 
 
@@ -247,6 +255,10 @@ class XmltvGuide:
                     data = self._download()
                     source = "download"
                 except Exception:
+                    # A forced refresh that cannot reach the guide keeps the
+                    # copy on disk, whatever its age, rather than none at all.
+                    if stale is None and force:
+                        stale = self._read_cache(max_age=None)
                     data = stale
                     source = "stale cache (download failed)"
             if data is None:
@@ -258,7 +270,7 @@ class XmltvGuide:
                 # pickle in ~1 s. Fall back to re-parsing (and re-writing
                 # the pickle) if it's missing, older than the XML, or
                 # from an older schema version.
-                if source == "cache" and self._load_index():
+                if source != "download" and self._load_index():
                     pass
                 else:
                     self._parse(data)
@@ -464,7 +476,6 @@ class XmltvGuide:
         # transparently decompress a gzip *body* (only transfer-encoding), so
         # detect the gzip magic and inflate it ourselves.
         if data[:2] == b"\x1f\x8b":
-            import gzip
             try:
                 data = gzip.decompress(data)
             except OSError:
