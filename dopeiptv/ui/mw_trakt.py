@@ -375,23 +375,6 @@ class _TraktMixin:
         except (TypeError, ValueError):
             return False
 
-    def is_item_watched(self, item: dict, kind: str) -> bool:
-        """Unified predicate the delegate calls once per paint - answers
-        whether the given item should show the 'already seen' badge."""
-        if kind == "vod":
-            return self.is_movie_watched(item)
-        if kind == "series":
-            return self.show_watched_count(item) > 0
-        if kind == "episode":
-            return self.is_episode_watched(item)
-        if kind == "history":
-            hk = item.get("_kind")
-            if hk == "movie":
-                return self.is_movie_watched(item)
-            if hk == "series":
-                return self.show_watched_count(item) > 0
-        return False
-
     def watched_source(self, item: dict, kind: str) -> str | None:
         """'trakt' if this row is watched according to Trakt, 'local' if
         it's only a local in-app mark, else None. Lets the delegate

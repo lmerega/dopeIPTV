@@ -222,8 +222,6 @@ class EpgGridDialog(QDialog):
         self._build_gen = 0
         self._rows: list = []
         self._focus: tuple[int, int] | None = None
-        self._now_line = None
-        self._grid_h = 0
         # Keep the board alive while open: the now-line and the progress
         # fills tick along instead of freezing at open time.
         self._refresh = QTimer(self)
@@ -483,7 +481,6 @@ class EpgGridDialog(QDialog):
         self._build_gen += 1       # invalidates in-flight logo callbacks
         self._rows = []
         self._focus = None
-        self._now_line = None
         self.play_btn.setEnabled(False)
         self.desc.hide()
         # Filter the FULL list (so matches beyond the first 300 are found),
@@ -504,12 +501,10 @@ class EpgGridDialog(QDialog):
         self.scene.addItem(self._header_group)
         self.scene.addItem(self._chan_group)
 
-        self._grid_h = grid_h
         self._draw_grid_lines(grid_h)
         self._draw_time_header()
         for row, ch in enumerate(chans):
             self._draw_channel_row(row, ch)
-        self._draw_now_line(grid_h)
 
         head_bg = QColor(P["pane"])
         self._corner = self.scene.addRect(
@@ -823,11 +818,6 @@ class EpgGridDialog(QDialog):
                     and stop > p["start_timestamp"]:
                 return True
         return False
-
-    def _draw_now_line(self, grid_h: int) -> None:
-        # No full-height "now" line: it ran across the whole channel list and
-        # read as clutter. The highlighted on-air card is the "now" marker.
-        self._now_line = None
 
     def _mark_now(self) -> None:
         """Re-mark which card is on air (and dim the ones that just ended),

@@ -670,10 +670,8 @@ class HomePage(QWidget):
         # background and swap them in. vod_streams(None) returns the whole movie
         # catalogue, which is inherently slow, so this is what makes Home feel
         # fast on launch.
-        self._posters_from_disk = False
         disk = self._read_disk_posters()
         if disk:
-            self._posters_from_disk = True
             self._fill_posters(disk[0], disk[1])
         client = w.client
 
@@ -707,7 +705,6 @@ class HomePage(QWidget):
                 # poke shelves into the already-painted page: the incremental
                 # path revealed the hidden hero, shifting every shelf below it
                 # mid-paint - the other half of "stuff behind Featured".
-                self._posters_from_disk = False
                 self.refresh()
             except RuntimeError:
                 pass

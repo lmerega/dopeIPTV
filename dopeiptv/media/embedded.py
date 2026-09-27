@@ -1490,7 +1490,6 @@ class EmbeddedPlayer(QWidget):
         self._seek_mode = "vod"
         self._program_window = 0.0        # 'program' mode: clamp bar to N secs
         self._program_base = 0.0          # secs of the programme before this segment
-        self._on_archive_segment = False  # timeline mode: on a seekable segment
         self.seek_overlay = QWidget(self)
         self.seek_overlay.setStyleSheet(
             "background: rgba(16,16,20,215); border-radius: 8px;")
@@ -2029,11 +2028,6 @@ class EmbeddedPlayer(QWidget):
         if moved:
             return
         self._click_timer.start()
-
-    def _is_seekable(self) -> bool:
-        if self._seek_mode in ("live", "timeline"):
-            return False   # plain live can't seek; timeline has its own control
-        return self._mpv_seekable()
 
     def _mpv_seekable(self) -> bool:
         """Whether the underlying mpv stream can seek (has a real duration),
@@ -2682,7 +2676,6 @@ class EmbeddedPlayer(QWidget):
         self._seek_mode = mode
         if mode != "timeline":
             self.exit_timeshift()
-            self._on_archive_segment = False
         if mode != "program":
             self._program_window = 0.0
             self._program_base = 0.0
@@ -2704,12 +2697,6 @@ class EmbeddedPlayer(QWidget):
         archive at the chosen offset (program_seek) instead of seeking mpv."""
         self._program_window = max(0.0, float(secs or 0.0))
         self._program_base = max(0.0, float(base or 0.0))
-
-    def set_on_archive_segment(self, on: bool) -> None:
-        """Tell the player whether the current timeline-mode stream is a
-        seekable catch-up segment (arrows fine-seek) or the live edge (arrows
-        step the timeline into the archive)."""
-        self._on_archive_segment = bool(on)
 
     def set_timeline_segments(self, segments) -> None:
         """Programme segments for the live timeline: boundary ticks plus a
@@ -3172,10 +3159,6 @@ class EmbeddedPlayer(QWidget):
         "rock":   (4, 3, 1, -1, -2, 0, 2, 3, 4, 4),
     }
     VIS_STYLES = ("bars", "spectrum", "wave")
-    # Enough to recognise a music file from its address alone; the window
-    # owns the full list, the player only needs to know "is this audio".
-    AUDIO_URL_EXTS = (".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus",
-                      ".wav", ".wma")
 
     def _vis_filter(self, style: str, w: int = 640, h: int = 360) -> str:
         """An mpv lavfi-complex graph that turns the audio into a picture -

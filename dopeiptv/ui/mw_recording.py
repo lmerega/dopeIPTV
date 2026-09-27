@@ -1023,11 +1023,6 @@ class _RecordingMixin:
         clamped = start < floor - 1
         start = max(start, floor)
         requested_back_min = (now - start) / 60.0
-        # Carried to _verify_catchup: a *within-depth* (un-clamped) request that
-        # plays but turns out to be the live feed (not seekable) is a fake
-        # archive at a point a real one would serve, so it may be hidden - only a
-        # request right at the depth limit is spared (that depth just isn't kept).
-        self._ts_last_clamped = clamped
         if prog:
             duration_min = max(
                 1, int((prog["stop_timestamp"] - start) // 60) + 2)

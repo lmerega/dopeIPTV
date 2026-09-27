@@ -711,8 +711,7 @@ class _LocalFilesMixin:
 
         run_async(self.pool, job, done, fail)
 
-    def _classify(self, state: dict, p: str,
-                  defer_audio: bool = True) -> None:
+    def _classify(self, state: dict, p: str) -> None:
         if p.lower().endswith(self.AUDIO_EXTS):
             # Music is shelved by ALBUM - the folder that directly holds
             # the tracks - not as thousands of loose files.

@@ -401,30 +401,6 @@ def _timeshift(source: str) -> bool:
     return "/timeshift/" in path or "timeshift.php" in path
 
 
-def _filter_escape(source: str) -> str:
-    """Escape a source for use as a filter option value.
-
-    A filtergraph is parsed twice: the description splits on , ; [ ] and
-    honours \\ and quotes, then each filter splits its own arguments on :.
-    A colon therefore has to survive both, which takes a DOUBLED backslash -
-    the description eats one and the option parser sees the other. This is
-    the form ffmpeg's own documentation uses for a Windows drive letter.
-
-    Quoting instead of escaping is what broke it: newer ffmpeg takes a
-    backslash inside quotes literally, so 'http\\://host\\:2095/x.mkv' became
-    a filename with backslashes in it and the parse failed on the leftovers -
-
-        No option name near 'http\\://lol.bz\\:2095/movie/....mkv:si=4'
-
-    - while older builds accepted the very same string. Unquoted and doubled
-    is accepted by both.
-    """
-    out = source.replace("\\", "\\\\\\\\")
-    for ch in (":", ",", ";", "[", "]", "'"):
-        out = out.replace(ch, "\\\\" + ch)
-    return out
-
-
 def ffmpeg_args(exe: str, source: str, copy_video: bool,
                 audio: int = 0, subs: int | None = None,
                 sub_codec: str = "", start: float = 0.0,
@@ -435,11 +411,10 @@ def ffmpeg_args(exe: str, source: str, copy_video: bool,
     engine and plays it as it arrives, and unlike HLS there are no segment
     files to write, name, serve and clean up.
 
-    A chosen subtitle is burned into the picture. The receiver only renders
-    subtitles it was handed as a separate WebVTT file, which cannot be made
-    from a live stream - nothing carried inside the stream is ever offered to
-    it. Burning them in always works, at the cost of re-encoding the video,
-    which is why it happens only when a subtitle is actually chosen.
+    A picture-based subtitle, when one is chosen, is drawn into the frames
+    with overlay, which means re-encoding the video - so that happens only
+    when one is actually chosen. A text subtitle goes to the receiver as a
+    WebVTT rendition beside the picture instead (see hls_args).
     """
     height, fps = QUALITY.get(quality, (0, 0))
     if height or fps:

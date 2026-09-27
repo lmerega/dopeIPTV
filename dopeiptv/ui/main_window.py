@@ -267,7 +267,6 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
         self._popout_placeholder = None
         self._popout_mirror = None   # macOS mirror surface (see mw_popout)
         self._multiview_win = None
-        self._last_player = None
         self._last_playlist_refresh = time.time()
         self._load_gen = 0
 
@@ -5703,7 +5702,6 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
             self._ts_depth_min = min(ts_days * 1440, self._TS_TIMELINE_MAX_MIN)
             self.player.set_seek_mode("timeline")
             self.player.enter_timeshift(self._ts_depth_min)
-            self.player.set_on_archive_segment(True)   # arrows fine-seek here
             self._update_ts_timeline()
             self.player.set_live_badge("timeshift")
         elif ts_days > 0:
@@ -5712,7 +5710,6 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
             self._ts_depth_min = min(ts_days * 1440, self._TS_TIMELINE_MAX_MIN)
             self.player.set_seek_mode("timeline")
             self.player.enter_timeshift(self._ts_depth_min)
-            self.player.set_on_archive_segment(False)  # live edge: arrows step
             self._update_ts_timeline()
             self.player.set_live_badge(None)
         else:
@@ -6205,10 +6202,6 @@ class MainWindow(_SettingsMixin, _TraktMixin, _RecordingMixin,
 
 
     # -- history -------------------------------------------------------------------
-
-    def _remove_history(self, item) -> None:
-        self.history.remove(item.get("_key"), item.get("_kind"))
-        self._load_items(None)
 
     def _remove_history_selected(self, clicked_item=None) -> None:
         items = [self.list_model.item_at(ix.row())
