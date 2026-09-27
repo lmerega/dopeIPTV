@@ -264,3 +264,23 @@ def test_archive_flags_are_read_defensively():
     assert _as_int(None) == 0
     assert _as_int("") == 0
     assert _as_int("yes") == 0
+
+
+def test_add_to_multiview_offers_every_cell_of_the_grid():
+    # The Local files menu offered a fixed four cells whatever the grid size.
+    from types import SimpleNamespace
+
+    from dopeiptv.ui.mw_multiview import _MultiviewMixin
+
+    def host(cells_setting, win=None):
+        return SimpleNamespace(
+            _multiview_win=win,
+            settings=SimpleNamespace(
+                value=lambda k, d=None: cells_setting))
+
+    count = _MultiviewMixin._multiview_cell_count
+    assert count(host("9")) == 9
+    assert count(host("2")) == 2
+    assert count(host("5")) == 4
+    assert count(host("x")) == 4
+    assert count(host("9", SimpleNamespace(cells=[1] * 6))) == 6

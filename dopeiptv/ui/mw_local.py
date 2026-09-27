@@ -1600,7 +1600,7 @@ class _LocalFilesMixin:
                         lambda: self._open_cast_dialog(it))
             mv = m.addMenu(tr("mv_add"))
             mvw = getattr(self, "_multiview_win", None)
-            for n in range(4):
+            for n in range(self._multiview_cell_count()):
                 occupant = ""
                 if (mvw is not None and n < len(mvw.cells)
                         and mvw.cells[n].title):

@@ -93,16 +93,7 @@ class _ContextMenuMixin:
             # count follows Settings → Multiview (2/4/6/9).
             mv = m.addMenu(tr("mv_add"))
             mvw = getattr(self, "_multiview_win", None)
-            if mvw is not None:
-                mv_count = len(mvw.cells)
-            else:
-                try:
-                    mv_count = int(self.settings.value("mv_cells", 4))
-                except (TypeError, ValueError):
-                    mv_count = 4
-                if mv_count not in (2, 4, 6, 9):
-                    mv_count = 4
-            for n in range(mv_count):
+            for n in range(self._multiview_cell_count()):
                 occupant = ""
                 if (mvw is not None and n < len(mvw.cells)
                         and mvw.cells[n].title):

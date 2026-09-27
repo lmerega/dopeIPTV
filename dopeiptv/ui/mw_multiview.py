@@ -1251,6 +1251,18 @@ class _MultiviewMixin:
             item=it, client=self.client, guide=getattr(self, "xmltv", None),
             playlist=self._active_playlist_name())
 
+    def _multiview_cell_count(self) -> int:
+        """How many cells the grid has, or will have when it opens - so an
+        "Add to multiview" menu offers each of them, not a fixed four."""
+        mvw = getattr(self, "_multiview_win", None)
+        if mvw is not None:
+            return len(mvw.cells)
+        try:
+            count = int(self.settings.value("mv_cells", 4))
+        except (TypeError, ValueError):
+            count = 4
+        return count if count in (2, 4, 6, 9) else 4
+
     def _active_playlist_name(self) -> str:
         store = getattr(self, "playlist_store", None)
         pl = store.active() if store else None
