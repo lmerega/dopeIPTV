@@ -908,6 +908,11 @@ class _TraktMixin:
             if not state["cancelled"]:
                 info.setText(tr("trakt_login_failed", msg=msg))
 
+        # However the dialog goes away - Cancel, Escape or the window's close
+        # button - the listener must stop. Only Cancel used to say so, and
+        # closing the window left it holding the port for three minutes: the
+        # next attempt reported the port busy.
+        d.finished.connect(lambda _r: state.__setitem__("cancelled", True))
         # Start the loopback listener first, then open the browser so the
         # server is already waiting when Trakt redirects back.
         run_async(
@@ -975,7 +980,8 @@ class _TraktMixin:
             if not state["cancelled"]:
                 info.setText(tr("trakt_could_not_start", msg=msg))
 
-        buttons.rejected.connect(lambda: state.__setitem__("cancelled", True))
+        # Closed any way at all: stop polling (see the browser dialog).
+        d.finished.connect(lambda _r: state.__setitem__("cancelled", True))
         run_async(self.pool, self.trakt.start_device_auth,
                   started, start_failed)
         d.exec()
