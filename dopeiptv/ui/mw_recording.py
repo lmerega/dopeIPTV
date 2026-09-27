@@ -11,7 +11,7 @@ import time
 from ..providers.client import b64, epg_times
 from ..i18n import tr
 from ..core.log import log, redact_url
-from ..core.recording import format_size, safe_filename
+from ..core.recording import format_size, free_path, safe_filename
 from .theme import P
 from .widgets import confirm
 from ..core.workers import run_async
@@ -703,9 +703,9 @@ class _RecordingMixin:
                 if ok and name.strip() else "")
         if not name:
             return
-        new_path = os.path.join(
+        new_path = free_path(os.path.join(
             os.path.dirname(path),
-            name + os.path.splitext(path)[1])
+            name + os.path.splitext(path)[1]), current=path)
         try:
             os.rename(path, new_path)
             self.rec.move_info(path, new_path)   # keep the info sidecar attached
@@ -756,7 +756,9 @@ class _RecordingMixin:
         try:
             os.makedirs(target, exist_ok=True)
             for it in items:
-                dest = os.path.join(target, os.path.basename(it["_path"]))
+                dest = free_path(
+                    os.path.join(target, os.path.basename(it["_path"])),
+                    current=it["_path"])
                 shutil.move(it["_path"], dest)
                 self.rec.move_info(it["_path"], dest)
         except OSError as e:

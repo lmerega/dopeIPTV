@@ -38,6 +38,21 @@ def _bundled_ffmpeg() -> str | None:
     return None
 
 
+def free_path(path: str, current: str | None = None) -> str:
+    """*path*, or "name (2).ext", "name (3).ext"... when a different file is
+    already there. A rename or a move onto an existing name replaced that
+    recording without a word - os.rename overwrites on Linux and macOS."""
+    if current is not None and os.path.abspath(path) == os.path.abspath(
+            current):
+        return path
+    stem, ext = os.path.splitext(path)
+    n = 2
+    while os.path.exists(path):
+        path = f"{stem} ({n}){ext}"
+        n += 1
+    return path
+
+
 def safe_filename(name: str | None) -> str:
     """Strip characters that are unsafe in filenames."""
     cleaned = "".join(c for c in (name or "recording")

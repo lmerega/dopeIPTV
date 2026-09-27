@@ -148,3 +148,17 @@ def test_ffmpeg_records_with_the_players_user_agent(tmp_path, monkeypatch):
                         staticmethod(lambda: ("mpv", "/usr/bin/mpv")))
     rm._spawn({"url": live, "title": "T", "stop": None})
     assert f"--user-agent={RECORD_UA}" in seen[0]
+
+
+def test_a_rename_or_move_never_replaces_another_recording(tmp_path):
+    from dopeiptv.core.recording import free_path
+
+    a = tmp_path / "Show.ts"
+    a.write_bytes(b"a")
+    b = tmp_path / "Other.ts"
+    b.write_bytes(b"b")
+    assert free_path(str(a)) == str(tmp_path / "Show (2).ts")
+    (tmp_path / "Show (2).ts").write_bytes(b"x")
+    assert free_path(str(a)) == str(tmp_path / "Show (3).ts")
+    assert free_path(str(a), current=str(a)) == str(a)    # renamed to itself
+    assert free_path(str(tmp_path / "New.ts")) == str(tmp_path / "New.ts")
