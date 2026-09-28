@@ -23,6 +23,11 @@ TAG="v${VER}"
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mSTOPPED: %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Every path below is relative to the repository root. Run from tools/ (or
+# anywhere else inside the clone), the version check found no __init__.py and
+# stopped with main merged locally but not pushed.
+cd "$(git rev-parse --show-toplevel)" || die "not inside the dopeIPTV clone"
+
 if [ -n "$(git status --porcelain)" ]; then
     die "working tree is dirty - commit or stash first"
 fi
