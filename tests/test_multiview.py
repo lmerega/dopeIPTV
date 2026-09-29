@@ -284,3 +284,21 @@ def test_add_to_multiview_offers_every_cell_of_the_grid():
     assert count(host("5")) == 4
     assert count(host("x")) == 4
     assert count(host("9", SimpleNamespace(cells=[1] * 6))) == 6
+
+
+def test_no_opengl_means_no_multiview_window(monkeypatch):
+    # On X11 without GLX, creating the grid's GL surfaces aborts the whole
+    # process. With the display probed as GL-less, multiview says so and
+    # builds nothing.
+    from types import SimpleNamespace
+
+    from dopeiptv.media import players
+    from dopeiptv.ui.mw_multiview import _MultiviewMixin
+
+    toasts = []
+    host = SimpleNamespace(_show_toast=lambda t, ms=0: toasts.append(t))
+    monkeypatch.setattr(players, "_gl_error", "no GLX")
+    assert _MultiviewMixin._multiview_available(host) is False
+    assert toasts
+    monkeypatch.setattr(players, "_gl_error", None)
+    assert _MultiviewMixin._multiview_available(host) is True

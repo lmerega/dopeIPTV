@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from ..core.log import log
 from ..i18n import tr
 from ..media.embedded import _MpvGLWidget, _SeekSlider
+from ..media import players
 from .widgets import (
     drag_frameless_resize, exec_menu_over_video, frameless_resize_edges,
     resize_edge_cursor, start_frameless_resize)
@@ -1251,6 +1252,18 @@ class _MultiviewMixin:
             item=it, client=self.client, guide=getattr(self, "xmltv", None),
             playlist=self._active_playlist_name())
 
+    def _multiview_available(self) -> bool:
+        """Multiview is made of OpenGL video surfaces, and on a display with
+        no OpenGL, building one aborts the process. Say so instead of opening
+        the grid. (Without libmpv the cells just stay blank, as before.)"""
+        if players.opengl_available():
+            return True
+        try:
+            self._show_toast(tr("embedded_gl_failed"), 5000)
+        except Exception:
+            pass
+        return False
+
     def _multiview_cell_count(self) -> int:
         """How many cells the grid has, or will have when it opens - so an
         "Add to multiview" menu offers each of them, not a fixed four."""
@@ -1293,6 +1306,8 @@ class _MultiviewMixin:
         as a toggle for an empty window instead of just re-raising it. A
         grid with running streams is only brought to the front: a toggle
         there would let one stray click drop every connection."""
+        if not self._multiview_available():
+            return
         w = self._multiview_win
         if (w is not None and w.isVisible()
                 and not any(c.url for c in w.cells)):
@@ -1354,7 +1369,7 @@ class _MultiviewMixin:
                          cell: int | None = None, item: dict | None = None,
                          client=None, guide=None, playlist: str = "",
                          start: float = 0.0) -> None:
-        if not url:
+        if not url or not self._multiview_available():
             return
         # Free the docked player's connection: otherwise a single-connection
         # account refuses the multiview cell (the same channel then only plays

@@ -74,8 +74,96 @@ except Exception as _e:
     _libmpv_error = f"{type(_e).__name__}: {_e}"
 
 
+# Set by probe_opengl() when the display offers no OpenGL at all.
+_gl_error: str | None = None
+
+
+def _glx_usable() -> bool | None:
+    """Does the X server behind $DISPLAY offer a GLX window config at all?
+
+    Asked through Xlib/GLX directly, because asking Qt is not safe: its GLX
+    integration calls qFatal ("Could not initialize GLX") when it finds no
+    matching FBConfig, and that aborts the process even for a bare
+    QOpenGLContext. The attributes are the minimum Qt falls back to (RGBA,
+    window-drawable, one bit per colour), so "none" here means Qt would
+    fail too. False only on a definite no; None when it cannot tell - then
+    nothing is disabled."""
+    import ctypes
+    try:
+        x11 = ctypes.CDLL("libX11.so.6")
+    except OSError:
+        return None
+    try:
+        gl = ctypes.CDLL("libGL.so.1")
+    except OSError:
+        return False          # no GL library: Qt's GLX integration cannot load
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XFree.argtypes = [ctypes.c_void_p]
+    gl.glXQueryExtension.argtypes = [ctypes.c_void_p,
+                                     ctypes.POINTER(ctypes.c_int),
+                                     ctypes.POINTER(ctypes.c_int)]
+    gl.glXChooseFBConfig.restype = ctypes.c_void_p
+    gl.glXChooseFBConfig.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                     ctypes.POINTER(ctypes.c_int),
+                                     ctypes.POINTER(ctypes.c_int)]
+    dpy = x11.XOpenDisplay(None)
+    if not dpy:
+        return None
+    try:
+        err, ev = ctypes.c_int(), ctypes.c_int()
+        if not gl.glXQueryExtension(dpy, ctypes.byref(err), ctypes.byref(ev)):
+            return False
+        # GLX_DRAWABLE_TYPE=WINDOW, GLX_RENDER_TYPE=RGBA, R/G/B >= 1, None
+        attrs = (ctypes.c_int * 11)(0x8010, 1, 0x8011, 1, 8, 1, 9, 1, 10, 1,
+                                    0)
+        n = ctypes.c_int(0)
+        cfgs = gl.glXChooseFBConfig(dpy, x11.XDefaultScreen(dpy), attrs,
+                                    ctypes.byref(n))
+        if cfgs:
+            x11.XFree(cfgs)
+        return n.value > 0
+    finally:
+        x11.XCloseDisplay(dpy)
+
+
+def probe_opengl(platform: str) -> None:
+    """Find out, before any video surface exists, whether this display can
+    give us OpenGL at all.
+
+    On X11 without a usable GLX - a virtual machine with no 3D acceleration,
+    a VNC or remote X session, a headless test runner - Qt does not fail a
+    video widget gracefully: it aborts the whole process ("Could not
+    initialize GLX") the moment one is created. With the answer in hand the
+    window is built without the embedded player, so the app opens and plays
+    through an external player instead of dying on launch. Only X11 is
+    asked; elsewhere nothing changes."""
+    global _gl_error
+    if platform != "xcb":
+        return
+    if "egl" in os.environ.get("QT_XCB_GL_INTEGRATION", "").lower():
+        return                # EGL chosen explicitly: GLX is not in play
+    try:
+        usable = _glx_usable()
+    except Exception as e:    # never let the probe itself stop start-up
+        log.warning("OpenGL probe failed: %s", e)
+        return
+    if usable is False:
+        _gl_error = ("this display offers no usable OpenGL (GLX), so video "
+                     "opens in an external player")
+
+
+def opengl_available() -> bool:
+    """False only when probe_opengl() found no OpenGL on this display."""
+    return _gl_error is None
+
+
 def embedded_playback_reason() -> str | None:
     """Returns None if in-app video is available, otherwise a short explanation."""
+    if _gl_error:
+        return _gl_error
     if _libmpv is None:
         hint = ""
         if sys.platform == "darwin":

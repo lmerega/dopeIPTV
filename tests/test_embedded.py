@@ -907,3 +907,24 @@ def test_macos_can_opt_into_the_raster_mirror():
     assert "_mac_raster = (sys.platform" in src
     # And the log says which path ran, so a report names it without asking.
     assert 'path=%s' in src
+
+
+def test_a_display_without_opengl_disables_the_embedded_player(monkeypatch):
+    # X11 without a usable GLX aborts the process on the first GL widget
+    # ("Could not initialize GLX"), and even on a bare QOpenGLContext - so
+    # the probe asks the X server itself. A definite no turns the embedded
+    # player off with a reason; "cannot tell" and other platforms change
+    # nothing.
+    from dopeiptv.media import players
+
+    for platform, answer, disabled in (("xcb", False, True),
+                                       ("xcb", None, False),
+                                       ("xcb", True, False),
+                                       ("wayland", False, False)):
+        monkeypatch.setattr(players, "_gl_error", None)
+        monkeypatch.setattr(players, "_glx_usable", lambda a=answer: a)
+        players.probe_opengl(platform)
+        assert players.opengl_available() is (not disabled), platform
+        if disabled:
+            assert "OpenGL" in (players.embedded_playback_reason() or "")
+            assert not players.embedded_playback_supported()

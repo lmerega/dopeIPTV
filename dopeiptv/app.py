@@ -49,6 +49,23 @@ def _qt_message_filter(msg_type, context, message):
             return
     if _original_msg_handler is not None:
         _original_msg_handler(msg_type, context, message)
+        return
+    # PyQt answers None for Qt's own default handler, so there was nothing to
+    # hand the message on to and every Qt warning was dropped - including
+    # the one line a fatal error prints before Qt aborts, which is how a
+    # start-up crash came to say nothing at all ("Fatal Python error:
+    # Aborted", and no reason). They go to the log now.
+    from PyQt6.QtCore import QtMsgType
+    text = (message if isinstance(message, str)
+            else bytes(message).decode("utf-8", "replace"))
+    if msg_type == QtMsgType.QtDebugMsg:
+        log.debug("qt: %s", text)
+    elif msg_type == QtMsgType.QtInfoMsg:
+        log.info("qt: %s", text)
+    elif msg_type == QtMsgType.QtWarningMsg:
+        log.warning("qt: %s", text)
+    else:
+        log.error("qt: %s", text)
 
 
 from .core.stores import PlaylistStore
@@ -422,6 +439,10 @@ def main() -> int:
     apply_theme(settings)
     app.setStyleSheet(build_style())
     log.info("Qt platform: %s", app.platformName())
+    if _libmpv is not None:
+        # X11 aborts outright on a GL widget without GLX; see probe_opengl.
+        from .media.players import probe_opengl
+        probe_opengl(app.platformName())
     if _libmpv is not None:
         reason = embedded_playback_reason()
         if reason:
