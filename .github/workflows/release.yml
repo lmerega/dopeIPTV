@@ -161,6 +161,13 @@ jobs:
             mpv libmpv-dev ffmpeg ruby ruby-dev build-essential \
             libgl1 libegl1 libxcb-cursor0 libpulse0 desktop-file-utils \
             libfuse2
+          # Everything Qt's X11 platform plugin links, so PyInstaller finds
+          # and bundles it. A library missing here is silently left out, and
+          # the AppImage then dies at start on any X11 box that lacks it too
+          # (AppImageHub's test runner was the first to say so).
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-xkb1 \
+            libxcb-image0 libxcb-render-util0 libxcb-shape0 libxcb-util1
           sudo gem install --no-document fpm
           # Retried, because one flaky transfer used to fail the whole Linux
           # build - the primary platform - on a download that works if you
@@ -302,6 +309,40 @@ jobs:
               echo "(none missing per ldd)"
               echo "--- self-check ---"
               /tmp/squashfs-root/usr/dopeiptv/dopeiptv --self-check
+              # The X11 platform plugin must load from the bundle alone.
+              echo "--- Qt X11 platform plugin unresolved deps (ldd) ---"
+              if LD_LIBRARY_PATH="$INT:$INT/PyQt6/Qt6/lib" \
+                   ldd "$INT/PyQt6/Qt6/plugins/platforms/libqxcb.so" \
+                   | grep "not found"; then
+                echo "::error::the Qt X11 platform plugin cannot load"
+                exit 1
+              fi
+              # And the app must actually OPEN - with the distro own Mesa
+              # driver, as a user machine has it. The self-check above loads
+              # no GL at all, so it never saw either way a real start failed:
+              # a missing X11 library, or a bundled libstdc++ older than the
+              # one the host Mesa LLVM needs (Ubuntu 24.04+), which leaves X11
+              # with no GL config and Qt aborts.
+              echo "--- launch under Xvfb with the distro Mesa ---"
+              apt-get install -y -qq --no-install-recommends xvfb xauth \
+                libgl1-mesa-dri libglx-mesa0 >/dev/null
+              export HOME=/tmp/home
+              mkdir -p "$HOME"
+              xvfb-run -a -s "-screen 0 1280x800x24" \
+                /tmp/squashfs-root/AppRun >/tmp/launch.log 2>&1 &
+              pid=$!
+              sleep 15
+              if ! kill -0 "$pid" 2>/dev/null; then
+                cat /tmp/launch.log
+                echo "::error::the app exited within 15 s instead of showing a window"
+                exit 1
+              fi
+              if ! grep -q "Embedded playback: enabled" /tmp/launch.log; then
+                cat /tmp/launch.log
+                echo "::error::the app runs, but in-app video is off"
+                exit 1
+              fi
+              echo "alive after 15 s, in-app video enabled"
             '
             echo "::endgroup::"
           done

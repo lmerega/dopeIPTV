@@ -216,14 +216,16 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-# NOTE: we deliberately ship PyInstaller's full bundled OpenGL/Mesa stack
-# (libGL/libEGL/libglapi/libgallium/libLLVM, i.e. the self-contained llvmpipe
-# software renderer). An earlier version stripped it to use the host's GL, but
-# that mixed a host libGL with our bundled libEGL and stopped the embedded
-# player's window from coming up on some systems (e.g. an Ubuntu Wayland VM).
-# The bundled stack is self-contained and is what works across machines,
-# including software-only GL in VMs; the "did not find extension DRI_Mesa"
-# lines it prints when it probes for a hardware driver are harmless noise.
+# The C++ runtime comes from the host, never from the bundle. The GL driver
+# does too (PyInstaller does not collect Mesa), and on a distro newer than
+# the build host that driver's LLVM needs a newer libstdc++ than ours - with
+# our copy already loaded, Mesa fails to load, X11 has no GL config left and
+# Qt aborts at start ("Could not initialize GLX"; Ubuntu 24.04 is enough).
+# The host's copy is always at least as new as what we need: the bundle asks
+# for GLIBCXX_3.4.29 at most, and the glibc 2.35 floor means GCC 12's 3.4.30.
+_HOST_CXX_RUNTIME = ("libstdc++.so.6", "libgcc_s.so.1")
+a.binaries = [b for b in a.binaries
+              if os.path.basename(b[0]) not in _HOST_CXX_RUNTIME]
 pyz = PYZ(a.pure)
 
 exe = EXE(
